@@ -1,3 +1,0 @@
-alias make="gcc $(pkg-config --cflags ncurses) -obin main.c $(pkg-config --libs ncurses)"
-alias run='./bin'
-alias mr='make && run'
