@@ -1,76 +1,107 @@
 #include <unistd.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/wait.h>
 #include <string.h>
 
 #include <ncurses.h>
 #include <sqlite3.h>
 
+#include "util.c"
+#include "data-model.c"
+
+int shut_down(sqlite3 *db)
+{
+    int err = 0;
+    printf("Closing database connection...");
+    if (err = sqlite3_close_v2(db)) {
+        fprintf(stderr, "failed:\n  %s\n", sqlite3_errmsg(db));
+    } else {
+        printf("done.\n");
+    }
+    endwin();
+    exit(0);
+}
+
 int str_starts_with(char *str, const char *prefix)
 {
     return (0 == strncmp(prefix, str, strlen(prefix)));
 }
 
-void ui_show_user_tables(sqlite3 *db)
+int prepare_query_for_user_tables(sqlite3 *db, sqlite3_stmt **stmt)
 {
-    sqlite3_stmt *stmt;
     int err = 0;
     char sql[255] = "select schema, name, type, ncol, wr, strict "
                     "from pragma_table_list;";
-    err = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+    err = sqlite3_prepare_v2(db, sql, -1, stmt, NULL);
     if (err) {
         printw("Error preparing statement: %s\n", sqlite3_errmsg(db));
-    } else {
-        int cols = sqlite3_column_count(stmt);
-        printw("col count: %d\n", cols);
-        for (int idx = 0; idx < cols; ++idx) {
-            printw("  %s ", sqlite3_column_name(stmt, idx));
-        }
-        printw("\n");
+    }
+    return err;
+}
 
-        while (err = sqlite3_step(stmt)) {
-            if (SQLITE_ROW == err) {
-                int col_type = 0;
-                char *table_name = sqlite3_column_text(stmt, 1);
-                if (!str_starts_with(table_name, "sqlite_")) {
-                    for (int idx = 0; idx < cols; ++idx) {
-                        switch (sqlite3_column_type(stmt, idx)) {
-                            case SQLITE_INTEGER:
-                                printw("  %d", sqlite3_column_int(stmt, idx));
-                                break;
-                            case SQLITE_FLOAT:
-                                printw("  %f", sqlite3_column_double(stmt, idx));
-                                break;
-                            case SQLITE_TEXT: {
-                                char *text = sqlite3_column_text(stmt, idx);
-                                if (!str_starts_with(text, "sqlite_")) {
-                                    printw("  %s", text);
-                                }
-                            } break;
-                            case SQLITE_BLOB:
-                                printw("  %f", sqlite3_column_blob(stmt, idx));
-                                break;
-                            case SQLITE_NULL:
-                                printw("  NULL");
-                                break;
-                            default:
-                                printw("  Unknown Type\n");
-                        }
+void tabulate_user_tables(sqlite3 *db, sqlite3_stmt *stmt, struct tabular_data *tabdata)
+{
+}
+
+void ui_show_user_tables(sqlite3 *db)
+{
+    int err = 0;
+    sqlite3_stmt *stmt;
+
+    return_on_err(prepare_query_for_user_tables(db, &stmt));
+    int cols = sqlite3_column_count(stmt);
+    struct tabular_data *tabdata = init_tabular_data(cols);
+    tabulate_user_tables(db, stmt, tabdata);
+    printw("col count: %d\n", cols);
+    for (int idx = 0; idx < cols; ++idx) {
+        printw("  %s ", sqlite3_column_name(stmt, idx));
+    }
+    printw("\n");
+    refresh();
+
+    while (err = sqlite3_step(stmt)) {
+        if (SQLITE_ROW == err) {
+            int col_type = 0;
+            const char *table_name = sqlite3_column_text(stmt, 1);
+            if (!str_starts_with((char *)table_name, "sqlite_")) {
+                for (int idx = 0; idx < cols; ++idx) {
+                    switch (sqlite3_column_type(stmt, idx)) {
+                        case SQLITE_INTEGER:
+                            printw("  %d", sqlite3_column_int(stmt, idx));
+                            break;
+                        case SQLITE_FLOAT:
+                            printw("  %f", sqlite3_column_double(stmt, idx));
+                            break;
+                        case SQLITE_TEXT: {
+                            const char *text = sqlite3_column_text(stmt, idx);
+                            if (!str_starts_with((char *)text, "sqlite_")) {
+                                printw("  %s", text);
+                            }
+                        } break;
+                        case SQLITE_BLOB:
+                            printw("  %f", sqlite3_column_blob(stmt, idx));
+                            break;
+                        case SQLITE_NULL:
+                            printw("  NULL");
+                            break;
+                        default:
+                            printw("  Unknown Type\n");
                     }
-                    printw("\n");
                 }
-            } else {
-                switch (err) {
-                case SQLITE_ROW: printw("Success: Row returned.\n"); break;
-                case SQLITE_DONE: printw("Success: Done.\n"); break;
-                case SQLITE_MISUSE:
-                    printw("Error (SQLITE_MISUSE) stepping through statement: %s\n", sqlite3_errmsg(db));
-                    break;
-                default:
-                    printw("Error (%d) stepping through statement: %s\n", err, sqlite3_errmsg(db));
-                }
-                break;
+                printw("\n");
             }
+        } else {
+            switch (err) {
+            case SQLITE_ROW: printw("Success: Row returned.\n"); break;
+            case SQLITE_DONE: printw("Success: Done.\n"); break;
+            case SQLITE_MISUSE:
+                printw("Error (SQLITE_MISUSE) stepping through statement: %s\n", sqlite3_errmsg(db));
+                break;
+            default:
+                printw("Error (%d) stepping through statement: %s\n", err, sqlite3_errmsg(db));
+            }
+            break;
         }
     }
     refresh();
@@ -97,6 +128,11 @@ int main(int argc, char **argv)
 	initscr();          /* Start curses mode 		  */
 
     printw("Ncurses Test\n");
+
+    // TODO:
+    // - Then we will load data into our new struct from sqlite.
+    // - Then we will render the data to the screen.
+
     ui_show_user_tables(db);
 
     printw(help_msg);
@@ -129,12 +165,5 @@ int main(int argc, char **argv)
     }
 
 exit:
-    endwin();
-    printf("Closing database connection...");
-    if (err = sqlite3_close_v2(db)) {
-        fprintf(stderr, "failed:\n  %s\n", sqlite3_errmsg(db));
-    } else {
-        printf("done.\n");
-    }
-    return 0;
+    return shut_down(db);
 }
