@@ -44,15 +44,14 @@ void populate_data_table_from_sqlite(Data_Table *datatable, sqlite3 *db, sqlite3
 
     int status = 0;
     Data_Cursor cursor = { datatable, 0, 0 };
+    Data_Column *column = NULL;
     Data_Cell *datacell = NULL;
 
     // Populate column names
-    /*
     loop (idx, datatable->col_count) {
-        // TODO:
-        // sqlite3_column_name(stmt, idx);
+        column = &datatable->column_data[idx];
+        column->name = sqlite3_column_name(stmt, idx);
     }
-    */
 
     // Populate data
     for (cursor.col_idx = 0; status = sqlite3_step(stmt); ++cursor.col_idx) {
@@ -81,22 +80,12 @@ void populate_data_table_from_sqlite(Data_Table *datatable, sqlite3 *db, sqlite3
     }
 }
 
-void ui_show_user_tables(sqlite3 *db)
+void view_table(Data_Table *table)
 {
-    sqlite3_stmt *stmt;
-
-    char sql[255] = "select schema, name, type, ncol, wr, strict "
-                    "from pragma_table_list;";
-    return_on_err(prepare_query_for_user_tables(db, &stmt, sql));
-
-    int col_count = sqlite3_column_count(stmt);
-
-    Data_Table *datatable = new_data_table(col_count);
-    populate_data_table_from_sqlite(datatable, db, stmt);
-    printw("Column count: %d\n", col_count);
-    loop(col_idx, col_count) {
-        Data_Column *datacol = &datatable->column_data[col_idx];
-        move(5, 20 * col_idx);
+    printw("Column count: %d\n", table->col_count);
+    loop(col_idx, table->col_count) {
+        Data_Column *datacol = &table->column_data[col_idx];
+        mvprintw(4, 20 * col_idx, "  %s\n", datacol->name);
         Data_Cell *datacell = (Data_Cell *)datacol->dymem_cells->data;
         loop (idx, datacol->cell_count) {
             mvprintw(5 + idx, 20 * col_idx, "  %s\n", datacell->str_data);
@@ -106,6 +95,25 @@ void ui_show_user_tables(sqlite3 *db)
     printw("\n");
 
     refresh();
+}
+
+void ui_show_user_tables(sqlite3 *db)
+{
+    // Query data.
+    sqlite3_stmt *stmt;
+    char sql[255] = "select schema, name, type, ncol, wr, strict "
+                    "from pragma_table_list;";
+    return_on_err(prepare_query_for_user_tables(db, &stmt, sql));
+
+    // Populate data.
+    int col_count = sqlite3_column_count(stmt);
+    Data_Table *datatable = new_data_table(col_count);
+    populate_data_table_from_sqlite(datatable, db, stmt);
+
+    // Display data.
+    view_table(datatable);
+
+    // Cleanup
     sqlite3_finalize(stmt);
 }
 

@@ -65,7 +65,8 @@ typedef struct data_cell {
 } Data_Cell;
 
 typedef struct data_column {
-    int cell_count;  // Number of cells in column.
+    int cell_count;  // Number of cells in column (exc. name).
+    const char *name;
     Dymem *dymem_cells;
 } Data_Column;
 
@@ -167,6 +168,9 @@ void *init_data_column(Data_Column *datacol)
 {
     datacol->cell_count = 0;
     datacol->dymem_cells = dymem_init(200 * sizeof(Data_Cell));
+
+    // FIXME: Temporary hack ahead of proper memory management
+    datacol->name = (char *)malloc(255);
 }
 
 Data_Table *new_data_table(int col_count)
