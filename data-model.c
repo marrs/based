@@ -94,7 +94,7 @@ Data_Cell *init_data_cell_from_sqlite_row(
             datacell->type = DYTYPE_NULL;
 
             datacell->str_size = 4;
-            datacell->str_data = dymem_allocate(global_db_str_mem, datacell->str_size + 1);
+            datacell->str_data = (char *)dymem_allocate(global_db_str_mem, datacell->str_size + 1);
             strcpy(datacell->str_data, "NULL");
 
             datacell->raw_size = 0;
@@ -108,9 +108,8 @@ Data_Cell *init_data_cell_from_sqlite_row(
             datacell->raw_data = (int *)dymem_allocate(global_db_bin_mem, datacell->raw_size);
             *(int *)datacell->raw_data = sqlite3_column_int(stmt, col_idx);
 
-            datacell->str_data = dymem_allocate(global_db_str_mem, TEXT_LEN_FOR_LARGEST_INT);
-            // TODO: sqlite3_column_text() does the str conversion for us.
-            sprintf(datacell->str_data, "%d", *(int *)datacell->raw_data);
+            datacell->str_data = (char *)dymem_allocate(global_db_str_mem, TEXT_LEN_FOR_LARGEST_INT);
+            strcpy(datacell->str_data, sqlite3_column_text(stmt, col_idx));
             datacell->str_size = strlen(datacell->str_data);
             break;
 
@@ -121,9 +120,8 @@ Data_Cell *init_data_cell_from_sqlite_row(
             datacell->raw_data = (double *)dymem_allocate(global_db_bin_mem, datacell->raw_size);
             *(double *)datacell->raw_data = sqlite3_column_double(stmt, col_idx);
 
-            datacell->str_data = dymem_allocate(global_db_str_mem, TEXT_LEN_FOR_LARGEST_FLOAT);
-            // TODO: sqlite3_column_text() does the str conversion for us.
-            sprintf(datacell->str_data, "%d", *(double *)datacell->raw_data);
+            datacell->str_data = (char *)dymem_allocate(global_db_str_mem, TEXT_LEN_FOR_LARGEST_FLOAT);
+            strcpy(datacell->str_data, (char *)sqlite3_column_text(stmt, col_idx));
             datacell->str_size = strlen(datacell->str_data);
 
 
@@ -132,7 +130,7 @@ Data_Cell *init_data_cell_from_sqlite_row(
             datacell->type = DYTYPE_BLOB;
 
             datacell->str_size = 4;
-            datacell->str_data = dymem_allocate(global_db_str_mem, datacell->str_size + 1);
+            datacell->str_data = (char *)dymem_allocate(global_db_str_mem, datacell->str_size + 1);
             strcpy(datacell->str_data, "BLOB");
 
             datacell->raw_size = sqlite3_column_bytes(stmt, col_idx);
@@ -147,7 +145,7 @@ Data_Cell *init_data_cell_from_sqlite_row(
             datacell->raw_size = datacell->str_size + 1;
             datacell->raw_data = NULL;
 
-            datacell->str_data = dymem_allocate(global_db_str_mem, datacell->raw_size);
+            datacell->str_data = (char *)dymem_allocate(global_db_str_mem, datacell->raw_size);
             strcpy(datacell->str_data, sqlite3_column_text(stmt, col_idx));
             break;
 
@@ -158,7 +156,7 @@ Data_Cell *init_data_cell_from_sqlite_row(
             datacell->raw_data = NULL;
 
             datacell->str_size = 7;
-            datacell->str_data = dymem_allocate(global_db_str_mem, datacell->str_size + 1);
+            datacell->str_data = (char *)dymem_allocate(global_db_str_mem, datacell->str_size + 1);
             strcpy(datacell->str_data, "UNKNOWN");
     }
 
