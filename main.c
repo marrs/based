@@ -39,17 +39,17 @@ int prepare_query_for_user_tables(sqlite3 *db, sqlite3_stmt **stmt, char *sql)
     return err;
 }
 
-void populate_data_table_from_sqlite(Data_Table *datatable, sqlite3 *db, sqlite3_stmt *stmt)
+void populate_data_table_from_sqlite(Data_Table *table, sqlite3 *db, sqlite3_stmt *stmt)
 {
 
     int status = 0;
-    Data_Cursor cursor = { datatable, 0, 0 };
+    Data_Cursor cursor = { table, 0, 0 };
     Data_Column *column = NULL;
-    Data_Cell *datacell = NULL;
+    Data_Cell *cell = NULL;
 
     // Populate column names
-    loop (idx, datatable->col_count) {
-        column = &datatable->column_data[idx];
+    loop (idx, table->col_count) {
+        column = &table->column_data[idx];
         column->name = sqlite3_column_name(stmt, idx);
     }
 
@@ -58,13 +58,13 @@ void populate_data_table_from_sqlite(Data_Table *datatable, sqlite3 *db, sqlite3
         if (SQLITE_ROW == status) {
 
             for (cursor.row_idx = 0;
-            cursor.row_idx < datatable->col_count;
+            cursor.row_idx < table->col_count;
             ++cursor.row_idx) {
-                Data_Column *column = &datatable->column_data[cursor.row_idx];
-                datacell = (Data_Cell *)dymem_allocate(column->dymem_cells, sizeof(Data_Cell));
+                Data_Column *column = &table->column_data[cursor.row_idx];
+                cell = (Data_Cell *)dymem_allocate(column->dymem_cells, sizeof(Data_Cell));
                 ++column->cell_count;
 
-                init_data_cell_from_sqlite_row(datacell, stmt, cursor.row_idx);
+                init_data_cell_from_sqlite_row(cell, stmt, cursor.row_idx);
             }
         } else {
             switch (status) {
@@ -84,12 +84,12 @@ void view_table(Data_Table *table)
 {
     printw("Column count: %d\n", table->col_count);
     loop(col_idx, table->col_count) {
-        Data_Column *datacol = &table->column_data[col_idx];
-        mvprintw(4, 20 * col_idx, "  %s\n", datacol->name);
-        Data_Cell *datacell = (Data_Cell *)datacol->dymem_cells->data;
-        loop (idx, datacol->cell_count) {
-            mvprintw(5 + idx, 20 * col_idx, "  %s\n", datacell->str_data);
-            ++datacell;
+        Data_Column *column = &table->column_data[col_idx];
+        mvprintw(4, 20 * col_idx, "  %s\n", column->name);
+        Data_Cell *cell = (Data_Cell *)column->dymem_cells->data;
+        loop (idx, column->cell_count) {
+            mvprintw(5 + idx, 20 * col_idx, "  %s\n", cell->str_data);
+            ++cell;
         }
     }
     printw("\n");
@@ -107,11 +107,11 @@ void ui_show_user_tables(sqlite3 *db)
 
     // Populate data.
     int col_count = sqlite3_column_count(stmt);
-    Data_Table *datatable = new_data_table(col_count);
-    populate_data_table_from_sqlite(datatable, db, stmt);
+    Data_Table *table = new_data_table(col_count);
+    populate_data_table_from_sqlite(table, db, stmt);
 
     // Display data.
-    view_table(datatable);
+    view_table(table);
 
     // Cleanup
     sqlite3_finalize(stmt);
