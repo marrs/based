@@ -39,47 +39,6 @@ int prepare_query_for_user_tables(sqlite3 *db, sqlite3_stmt **stmt, char *sql)
     return err;
 }
 
-void populate_data_table_from_sqlite(Data_Table *table, sqlite3 *db, sqlite3_stmt *stmt)
-{
-
-    int status = 0;
-    Data_Cursor cursor = { table, 0, 0 };
-    Data_Column *column = NULL;
-    Data_Cell *cell = NULL;
-
-    // Populate column names
-    loop (idx, table->col_count) {
-        column = &table->column_data[idx];
-        column->name = sqlite3_column_name(stmt, idx);
-    }
-
-    // Populate data
-    for (cursor.col_idx = 0; status = sqlite3_step(stmt); ++cursor.col_idx) {
-        if (SQLITE_ROW == status) {
-
-            for (cursor.row_idx = 0;
-            cursor.row_idx < table->col_count;
-            ++cursor.row_idx) {
-                Data_Column *column = &table->column_data[cursor.row_idx];
-                cell = (Data_Cell *)dymem_allocate(column->dymem_cells, sizeof(Data_Cell));
-                ++column->cell_count;
-
-                init_data_cell_from_sqlite_row(cell, stmt, cursor.row_idx);
-            }
-        } else {
-            switch (status) {
-            case SQLITE_DONE: printw("Success: Done.\n"); break;
-            case SQLITE_MISUSE:
-                printw("Error (SQLITE_MISUSE) stepping through statement: %s\n", sqlite3_errmsg(db));
-                break;
-            default:
-                printw("Error (%d) stepping through statement: %s\n", status, sqlite3_errmsg(db));
-            }
-            break;
-        }
-    }
-}
-
 void view_table(Data_Table *table)
 {
     printw("Column count: %d\n", table->col_count);
