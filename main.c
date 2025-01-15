@@ -8,6 +8,7 @@
 #include <sqlite3.h>
 
 #include "util.c"
+#include "memory.c"
 #include "data-model.c"
 
 int shut_down(sqlite3 *db)
@@ -28,11 +29,9 @@ int str_starts_with(char *str, const char *prefix)
     return (0 == strncmp(prefix, str, strlen(prefix)));
 }
 
-int prepare_query_for_user_tables(sqlite3 *db, sqlite3_stmt **stmt)
+int prepare_query_for_user_tables(sqlite3 *db, sqlite3_stmt **stmt, char *sql)
 {
     int err = 0;
-    char sql[255] = "select schema, name, type, ncol, wr, strict "
-                    "from pragma_table_list;";
     err = sqlite3_prepare_v2(db, sql, -1, stmt, NULL);
     if (err) {
         printw("Error preparing statement: %s\n", sqlite3_errmsg(db));
@@ -40,70 +39,67 @@ int prepare_query_for_user_tables(sqlite3 *db, sqlite3_stmt **stmt)
     return err;
 }
 
-void tabulate_user_tables(sqlite3 *db, sqlite3_stmt *stmt, struct tabular_data *tabdata)
+void populate_data_table_from_sqlite(Data_Table *datatable, sqlite3 *db, sqlite3_stmt *stmt)
 {
-}
 
-void ui_show_user_tables(sqlite3 *db)
-{
-    int err = 0;
-    sqlite3_stmt *stmt;
+    int status = 0;
+    Data_Cursor cursor = { datatable, 0, 0 };
+    Data_Cell *datacell = NULL;
 
-    return_on_err(prepare_query_for_user_tables(db, &stmt));
-    int cols = sqlite3_column_count(stmt);
-    struct tabular_data *tabdata = init_tabular_data(cols);
-    tabulate_user_tables(db, stmt, tabdata);
-    printw("col count: %d\n", cols);
-    for (int idx = 0; idx < cols; ++idx) {
-        printw("  %s ", sqlite3_column_name(stmt, idx));
+    // Populate column names
+    loop (idx, datatable->col_count) {
+        // TODO:
+        // sqlite3_column_name(stmt, idx);
     }
-    printw("\n");
-    refresh();
 
-    while (err = sqlite3_step(stmt)) {
-        if (SQLITE_ROW == err) {
-            int col_type = 0;
-            const char *table_name = sqlite3_column_text(stmt, 1);
-            if (!str_starts_with((char *)table_name, "sqlite_")) {
-                for (int idx = 0; idx < cols; ++idx) {
-                    switch (sqlite3_column_type(stmt, idx)) {
-                        case SQLITE_INTEGER:
-                            printw("  %d", sqlite3_column_int(stmt, idx));
-                            break;
-                        case SQLITE_FLOAT:
-                            printw("  %f", sqlite3_column_double(stmt, idx));
-                            break;
-                        case SQLITE_TEXT: {
-                            const char *text = sqlite3_column_text(stmt, idx);
-                            if (!str_starts_with((char *)text, "sqlite_")) {
-                                printw("  %s", text);
-                            }
-                        } break;
-                        case SQLITE_BLOB:
-                            printw("  %f", sqlite3_column_blob(stmt, idx));
-                            break;
-                        case SQLITE_NULL:
-                            printw("  NULL");
-                            break;
-                        default:
-                            printw("  Unknown Type\n");
-                    }
-                }
-                printw("\n");
+    // Populate data
+    for (cursor.col_idx = 0; status = sqlite3_step(stmt); ++cursor.col_idx) {
+        if (SQLITE_ROW == status) {
+
+            for (cursor.row_idx = 0;
+            cursor.row_idx < datatable->col_count;
+            ++cursor.row_idx) {
+                Data_Column *column = &datatable->column_data[cursor.row_idx];
+                datacell = (Data_Cell *)dymem_allocate(column->dymem_cells, sizeof(Data_Cell));
+                ++column->cell_count;
+
+                init_data_cell_from_sqlite_row(datacell, stmt, cursor.row_idx);
             }
         } else {
-            switch (err) {
-            case SQLITE_ROW: printw("Success: Row returned.\n"); break;
+            switch (status) {
             case SQLITE_DONE: printw("Success: Done.\n"); break;
             case SQLITE_MISUSE:
                 printw("Error (SQLITE_MISUSE) stepping through statement: %s\n", sqlite3_errmsg(db));
                 break;
             default:
-                printw("Error (%d) stepping through statement: %s\n", err, sqlite3_errmsg(db));
+                printw("Error (%d) stepping through statement: %s\n", status, sqlite3_errmsg(db));
             }
             break;
         }
     }
+}
+
+void ui_show_user_tables(sqlite3 *db)
+{
+    sqlite3_stmt *stmt;
+
+    char sql[255] = "select schema, name, type, ncol, wr, strict "
+                    "from pragma_table_list;";
+    return_on_err(prepare_query_for_user_tables(db, &stmt, sql));
+
+    int col_count = sqlite3_column_count(stmt);
+
+    Data_Table *datatable = new_data_table(col_count);
+    populate_data_table_from_sqlite(datatable, db, stmt);
+    printw("col count: %d\n", col_count);
+    /*
+    for (int idx = 0; idx < col_count; ++idx) {
+        printw("  %s ", sqlite3_column_name(stmt, idx));
+    }
+    printw("\n");
+    refresh();
+    */
+
     refresh();
     sqlite3_finalize(stmt);
 }
@@ -112,6 +108,9 @@ int main(int argc, char **argv)
 {
     sqlite3 *db = NULL;
     int err = 0;
+
+    global_db_str_mem = dymem_init(MB(2));
+    global_db_bin_mem = dymem_init(MB(2));
 
     if (argc > 1) {
         err = sqlite3_open_v2(argv[1], &db, SQLITE_OPEN_READONLY, 0);
