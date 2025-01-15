@@ -109,6 +109,7 @@ Data_Cell *init_data_cell_from_sqlite_row(
             *(int *)datacell->raw_data = sqlite3_column_int(stmt, col_idx);
 
             datacell->str_data = dymem_allocate(global_db_str_mem, TEXT_LEN_FOR_LARGEST_INT);
+            // TODO: sqlite3_column_text() does the str conversion for us.
             sprintf(datacell->str_data, "%d", *(int *)datacell->raw_data);
             datacell->str_size = strlen(datacell->str_data);
             break;
@@ -121,6 +122,7 @@ Data_Cell *init_data_cell_from_sqlite_row(
             *(double *)datacell->raw_data = sqlite3_column_double(stmt, col_idx);
 
             datacell->str_data = dymem_allocate(global_db_str_mem, TEXT_LEN_FOR_LARGEST_FLOAT);
+            // TODO: sqlite3_column_text() does the str conversion for us.
             sprintf(datacell->str_data, "%d", *(double *)datacell->raw_data);
             datacell->str_size = strlen(datacell->str_data);
 
@@ -141,10 +143,10 @@ Data_Cell *init_data_cell_from_sqlite_row(
         case SQLITE_TEXT:
             datacell->type = DYTYPE_TEXT;
 
-            datacell->raw_size = sqlite3_column_bytes(stmt, col_idx);
+            datacell->str_size = sqlite3_column_bytes(stmt, col_idx);
+            datacell->raw_size = datacell->str_size + 1;
             datacell->raw_data = NULL;
 
-            datacell->str_size = datacell->raw_size - 1;
             datacell->str_data = dymem_allocate(global_db_str_mem, datacell->raw_size);
             strcpy(datacell->str_data, sqlite3_column_text(stmt, col_idx));
             break;

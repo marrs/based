@@ -47,10 +47,12 @@ void populate_data_table_from_sqlite(Data_Table *datatable, sqlite3 *db, sqlite3
     Data_Cell *datacell = NULL;
 
     // Populate column names
+    /*
     loop (idx, datatable->col_count) {
         // TODO:
         // sqlite3_column_name(stmt, idx);
     }
+    */
 
     // Populate data
     for (cursor.col_idx = 0; status = sqlite3_step(stmt); ++cursor.col_idx) {
@@ -91,14 +93,17 @@ void ui_show_user_tables(sqlite3 *db)
 
     Data_Table *datatable = new_data_table(col_count);
     populate_data_table_from_sqlite(datatable, db, stmt);
-    printw("col count: %d\n", col_count);
-    /*
-    for (int idx = 0; idx < col_count; ++idx) {
-        printw("  %s ", sqlite3_column_name(stmt, idx));
+    printw("Column count: %d\n", col_count);
+    loop(col_idx, col_count) {
+        Data_Column *datacol = &datatable->column_data[col_idx];
+        move(5, 20 * col_idx);
+        Data_Cell *datacell = (Data_Cell *)datacol->dymem_cells->data;
+        loop (idx, datacol->cell_count) {
+            mvprintw(5 + idx, 20 * col_idx, "  %s\n", datacell->str_data);
+            ++datacell;
+        }
     }
     printw("\n");
-    refresh();
-    */
 
     refresh();
     sqlite3_finalize(stmt);
@@ -127,10 +132,6 @@ int main(int argc, char **argv)
 	initscr();          /* Start curses mode 		  */
 
     printw("Ncurses Test\n");
-
-    // TODO:
-    // - Then we will load data into our new struct from sqlite.
-    // - Then we will render the data to the screen.
 
     ui_show_user_tables(db);
 
