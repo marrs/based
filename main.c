@@ -10,7 +10,10 @@
 #include "util.c"
 #include "memory.c"
 #include "data-model.c"
-#include "view-model.c"
+#include "app-model.c"
+
+#include "widgets.c"
+#include "view.c"
 
 int shut_down(sqlite3 *db)
 {
@@ -40,72 +43,42 @@ int prepare_query_for_user_tables(sqlite3 *db, sqlite3_stmt **stmt, char *sql)
     return err;
 }
 
-void view_table(Data_Table *table, Cursor *cursor)
+void app_event_dispatcher(enum app_event evt)
 {
-    Table_Layout table_layout = { 4, 20 };
-    Data_Column *column = NULL;
-    Data_Cell *cell = NULL;
+    switch (global_app_state.current_view) {
+        case APP_VIEW_USER_TABLES:
+            view_user_tables(evt);
+            break;
 
-    printw("Column count: %d\n", table->col_count);
-    loop(col_idx, table->col_count) {
-        column = &table->column_data[col_idx];
-
-        // Display table header.
-        mvprintw(
-                table_layout.offset,
-                table_layout.column_width * col_idx,
-                "  %s\n", column->name);
-
-        // Display table data.
-        cell = (Data_Cell *)column->dymem_cells->data;
-        loop (idx, column->cell_count) {
-            mvprintw(
-                    table_layout.offset + 1 + idx,
-                    table_layout.column_width * col_idx,
-                    "  %s\n",
-                    cell->str_data);
-            ++cell;
-        }
+        default:
+            fprintf(stderr, "Error: No view renderer for %s\n", global_app_state.current_view);
     }
-
-    // Display table cursor.
-    attron(COLOR_PAIR(1));
-    loop(col_idx, table->col_count) {
-        column = &table->column_data[col_idx];
-        cell = (Data_Cell *)column->dymem_cells->data;
-        cell += cursor->row;
-        mvprintw(
-                table_layout.offset + 1 + cursor->row,
-                1 + table_layout.column_width * col_idx,
-                " %s\n",
-                cell->str_data);
-    }
-    attroff(COLOR_PAIR(1));
-    refresh();
 }
 
-void ui_show_user_tables(sqlite3 *db, Cursor *cursor)
+void ui_event_dispatcher(char key)
 {
-    // Query data.
-    sqlite3_stmt *stmt;
-    char sql[255] = "select schema, name, type, ncol, wr, strict "
-                    "from pragma_table_list;";
-    return_on_err(prepare_query_for_user_tables(db, &stmt, sql));
+    enum app_event event;
+    switch(key) {
+        case 'j':
+            event = EVENT_CURSOR_DOWN;
+            break;
 
-    // Populate data.
-    int col_count = sqlite3_column_count(stmt);
-    Data_Table *table = new_data_table(col_count);
-    populate_data_table_from_sqlite(table, db, stmt);
+        case 'k':
+            event = EVENT_CURSOR_UP;
+            break;
+        default: return;
+    }
 
-    // Display data.
-    view_table(table, cursor);
-
-    // Cleanup
-    sqlite3_finalize(stmt);
+    app_event_dispatcher(event);
 }
 
 int main(int argc, char **argv)
 {
+
+    // Init app state:
+    global_app_state.current_view = APP_VIEW_USER_TABLES;
+    global_app_state.user_tables.table = NULL;
+
     sqlite3 *db = NULL;
     int err = 0;
     Cursor cursor = { 0 };
@@ -121,10 +94,8 @@ int main(int argc, char **argv)
         }
     } else {
         fprintf(stderr, "Exiting: no sqlite database provided\n");
-            goto exit;
+        goto exit;
     }
-
-    char help_msg[255] = "Options are (q)uit and (e)dit.\n";
 
     // Init curses
 	initscr();
@@ -133,33 +104,52 @@ int main(int argc, char **argv)
 
     printw("Ncurses Test\n");
 
-    ui_show_user_tables(db, &cursor);
-    mvprintw(13, 4, help_msg);
-    refresh();          /* Print it on to the real screen */
+    // Query db for user tables
+    {
+        // Query data.
+        sqlite3_stmt *stmt;
+        char sql[255] = "select schema, name, type, ncol, wr, strict "
+                        "from pragma_table_list;";
+
+        err = prepare_query_for_user_tables(db, &stmt, sql);
+        if (err) goto exit;
+
+        // Populate models.
+        int col_count = sqlite3_column_count(stmt);
+        Data_Table *table = new_data_table(col_count);
+        populate_data_table_from_sqlite(table, db, stmt);
+        global_app_state.user_tables.table = table;
+
+        // Cleanup
+        sqlite3_finalize(stmt);
+    }
+
+    clear();
+    noecho();
+    app_event_dispatcher(EVENT_INIT_VIEW);
+
     char input_ch;
     while (input_ch = getch()) {
         switch (input_ch) {
-        case 'q': {
-              goto exit;
-        } break;
-        case 'e': {
-            pid_t pid = fork();
+            case 'j':
+            case 'k':
+                ui_event_dispatcher(input_ch);
+                break;
+            case 'q': {
+                  goto exit;
+            } break;
+            case 'e': {
+                pid_t pid = fork();
 
-            if (pid == 0) { // child
-                char *args[] = {"/usr/bin/vim", NULL};
-                execvp(args[0], args);
-            } else {        // parent
-                int status;
-                waitpid(pid, &status, 0);
-                printw("Child process finished\n");
-            }
-            clear();
-            printw("Editing finished\n");
-            printw(help_msg);
-        } break;
-        default: {
-            printw(help_msg);
-        }
+                if (pid == 0) { // child
+                    char *args[] = {"/usr/bin/vim", NULL};
+                    execvp(args[0], args);
+                } else {        // parent
+                    int status;
+                    waitpid(pid, &status, 0);
+                    printw("Child process finished\n");
+                }
+            } break;
         }
     }
 

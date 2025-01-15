@@ -69,7 +69,7 @@ typedef struct data_cell {
 
 typedef struct data_column {
     int cell_count;  // Number of cells in column (exc. name).
-    const char *name;
+    char *name;
     Dymem *dymem_cells;
 } Data_Column;
 
@@ -204,7 +204,7 @@ void populate_data_table_from_sqlite(Data_Table *table, sqlite3 *db, sqlite3_stm
     // Populate column names
     loop (idx, table->col_count) {
         column = &table->column_data[idx];
-        column->name = sqlite3_column_name(stmt, idx);
+        strcpy(column->name, sqlite3_column_name(stmt, idx));
     }
 
     // Populate data
