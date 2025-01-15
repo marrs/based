@@ -10,6 +10,7 @@
 #include "util.c"
 #include "memory.c"
 #include "data-model.c"
+#include "view-model.c"
 
 int shut_down(sqlite3 *db)
 {
@@ -39,24 +40,51 @@ int prepare_query_for_user_tables(sqlite3 *db, sqlite3_stmt **stmt, char *sql)
     return err;
 }
 
-void view_table(Data_Table *table)
+void view_table(Data_Table *table, Cursor *cursor)
 {
+    Table_Layout table_layout = { 4, 20 };
+    Data_Column *column = NULL;
+    Data_Cell *cell = NULL;
+
     printw("Column count: %d\n", table->col_count);
     loop(col_idx, table->col_count) {
-        Data_Column *column = &table->column_data[col_idx];
-        mvprintw(4, 20 * col_idx, "  %s\n", column->name);
-        Data_Cell *cell = (Data_Cell *)column->dymem_cells->data;
+        column = &table->column_data[col_idx];
+
+        // Display table header.
+        mvprintw(
+                table_layout.offset,
+                table_layout.column_width * col_idx,
+                "  %s\n", column->name);
+
+        // Display table data.
+        cell = (Data_Cell *)column->dymem_cells->data;
         loop (idx, column->cell_count) {
-            mvprintw(5 + idx, 20 * col_idx, "  %s\n", cell->str_data);
+            mvprintw(
+                    table_layout.offset + 1 + idx,
+                    table_layout.column_width * col_idx,
+                    "  %s\n",
+                    cell->str_data);
             ++cell;
         }
     }
-    printw("\n");
 
+    // Display table cursor.
+    attron(COLOR_PAIR(1));
+    loop(col_idx, table->col_count) {
+        column = &table->column_data[col_idx];
+        cell = (Data_Cell *)column->dymem_cells->data;
+        cell += cursor->row;
+        mvprintw(
+                table_layout.offset + 1 + cursor->row,
+                1 + table_layout.column_width * col_idx,
+                " %s\n",
+                cell->str_data);
+    }
+    attroff(COLOR_PAIR(1));
     refresh();
 }
 
-void ui_show_user_tables(sqlite3 *db)
+void ui_show_user_tables(sqlite3 *db, Cursor *cursor)
 {
     // Query data.
     sqlite3_stmt *stmt;
@@ -70,7 +98,7 @@ void ui_show_user_tables(sqlite3 *db)
     populate_data_table_from_sqlite(table, db, stmt);
 
     // Display data.
-    view_table(table);
+    view_table(table, cursor);
 
     // Cleanup
     sqlite3_finalize(stmt);
@@ -80,6 +108,7 @@ int main(int argc, char **argv)
 {
     sqlite3 *db = NULL;
     int err = 0;
+    Cursor cursor = { 0 };
 
     global_db_str_mem = dymem_init(MB(2));
     global_db_bin_mem = dymem_init(MB(2));
@@ -96,13 +125,16 @@ int main(int argc, char **argv)
     }
 
     char help_msg[255] = "Options are (q)uit and (e)dit.\n";
-	initscr();          /* Start curses mode 		  */
+
+    // Init curses
+	initscr();
+    start_color();
+    init_pair(1, COLOR_BLACK, COLOR_BLUE);  // Cursor colours.
 
     printw("Ncurses Test\n");
 
-    ui_show_user_tables(db);
-
-    printw(help_msg);
+    ui_show_user_tables(db, &cursor);
+    mvprintw(13, 4, help_msg);
     refresh();          /* Print it on to the real screen */
     char input_ch;
     while (input_ch = getch()) {
