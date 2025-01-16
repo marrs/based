@@ -7,13 +7,19 @@
 #include <ncurses.h>
 #include <sqlite3.h>
 
+#include "util.h"
+#include "memory.h"
+#include "event.h"
+#include "model.h"
+#include "view.h"
+
 #include "util.c"
 #include "memory.c"
 #include "data-model.c"
-#include "app-model.c"
 
 #include "widgets.c"
 #include "view.c"
+#include "event.c"
 
 int shut_down(sqlite3 *db)
 {
@@ -28,11 +34,6 @@ int shut_down(sqlite3 *db)
     exit(0);
 }
 
-int str_starts_with(char *str, const char *prefix)
-{
-    return (0 == strncmp(prefix, str, strlen(prefix)));
-}
-
 int prepare_query_for_user_tables(sqlite3 *db, sqlite3_stmt **stmt, char *sql)
 {
     int err = 0;
@@ -43,45 +44,15 @@ int prepare_query_for_user_tables(sqlite3 *db, sqlite3_stmt **stmt, char *sql)
     return err;
 }
 
-void app_event_dispatcher(enum app_event evt)
-{
-    switch (global_app_state.current_view) {
-        case APP_VIEW_USER_TABLES:
-            view_user_tables(evt);
-            break;
-
-        default:
-            fprintf(stderr, "Error: No view renderer for %s\n", global_app_state.current_view);
-    }
-}
-
-void ui_event_dispatcher(char key)
-{
-    enum app_event event;
-    switch(key) {
-        case 'j':
-            event = EVENT_CURSOR_DOWN;
-            break;
-
-        case 'k':
-            event = EVENT_CURSOR_UP;
-            break;
-        default: return;
-    }
-
-    app_event_dispatcher(event);
-}
-
 int main(int argc, char **argv)
 {
-
     // Init app state:
     global_app_state.current_view = APP_VIEW_USER_TABLES;
     global_app_state.user_tables.table = NULL;
 
     sqlite3 *db = NULL;
     int err = 0;
-    Cursor cursor = { 0 };
+    View_Cursor cursor = { 0, 0 };
 
     App_Memory_Pool *mempool = (App_Memory_Pool *)malloc(sizeof(App_Memory_Pool));
     init_app_memory_pool(mempool);
@@ -126,15 +97,27 @@ int main(int argc, char **argv)
     clear();
     noecho();
 
-    app_event_dispatcher(EVENT_INIT_VIEW);
+    Event event = { EVENT_INIT_VIEW, DYTYPE_NULL, .data_as_null = NULL };
+    dispatch_event(event);
 
     char input_ch;
     while (input_ch = getch()) {
         switch (input_ch) {
             case 'j':
-            case 'k':
-                ui_event_dispatcher(input_ch);
+                event = (Event){ EVENT_CURSOR_DOWN, DYTYPE_NULL, .data_as_null = NULL };
+                dispatch_event(event);
                 break;
+
+            case 'k':
+                event = (Event){ EVENT_CURSOR_UP, DYTYPE_NULL, .data_as_null = NULL };
+                dispatch_event(event);
+                break;
+
+            case 'l':
+                event = (Event){ EVENT_CURSOR_RIGHT, DYTYPE_NULL, .data_as_null = NULL };
+                dispatch_event(event);
+                break;
+
             case 'q': {
                   goto exit;
             } break;
@@ -150,6 +133,7 @@ int main(int argc, char **argv)
                     printw("Child process finished\n");
                 }
             } break;
+            default: continue;
         }
     }
 

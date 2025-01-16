@@ -3,7 +3,7 @@ typedef struct table_widget_layout {
     int column_width;
 } Table_Widget_Layout;
 
-void table_widget(Data_Table *table, Cursor *cursor)
+void table_widget(Data_Table *table, View_Cursor *cursor)
 {
     Table_Widget_Layout table_layout = { 4, 20 };
     Data_Column *column = NULL;
@@ -48,8 +48,7 @@ void table_widget(Data_Table *table, Cursor *cursor)
     attroff(COLOR_PAIR(1));
 }
 
-void help_widget()
+void status_bar_widget(char *msg)
 {
-    char help_msg[255] = "Options are (q)uit and (e)dit.\n";
-    mvprintw(13, 4, help_msg);
+    mvprintw(13, 4, msg);
 }

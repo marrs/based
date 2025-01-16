@@ -1,26 +1,12 @@
-void view_user_tables(enum app_event event)
+void view_table(View_Table_Model model)
 {
-    Cursor *cursor = &global_app_state.user_tables.cursor;
-    Data_Table *table = global_app_state.user_tables.table;
+    table_widget(model.table, model.cursor);
 
-    switch (event) {
-        case EVENT_CURSOR_UP:
-            if (cursor->row > 0) {
-                --cursor->row;
-            }
-            break;
-
-        case EVENT_CURSOR_DOWN:
-            if (cursor->row < table->columns->cell_count -1) {
-                ++cursor->row;
-            }
-            break;
-        default:
-            //cursor->row = 0;
+    char help_msg[255] = "Options are (q)uit and (e)dit.\n";
+    if (model.status_bar_text && strlen(model.status_bar_text)) {
+        status_bar_widget(model.status_bar_text);
+    } else {
+        status_bar_widget(help_msg);
     }
-
-    table_widget(table, cursor);
-    help_widget();
-
     refresh();
 }

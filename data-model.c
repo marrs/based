@@ -51,8 +51,6 @@
  *     NULL
  */
 
-#include "data-model.h"
-
 void init_app_memory_pool(App_Memory_Pool *pool)
 {
     pool->table_count = 0;

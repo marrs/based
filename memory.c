@@ -17,14 +17,6 @@
  * on assignment.
  */
 
-typedef struct dymem {
-    int page_size;
-    int size;
-    int used;
-    void *cursor;
-    void *data;
-} Dymem;
-
 Dymem *dymem_init(size_t page_size)
 {
     Dymem *mem = (Dymem *)malloc(sizeof(Dymem));
