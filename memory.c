@@ -18,17 +18,12 @@
  */
 
 typedef struct dymem {
-    size_t page_size;
-    size_t size;
-    size_t used;
+    int page_size;
+    int size;
+    int used;
     void *cursor;
     void *data;
 } Dymem;
-
-// Global buffers used for database data.
-Dymem *global_db_bin_mem;    // For binary data
-Dymem *global_db_str_mem;    // For text representations
-
 
 Dymem *dymem_init(size_t page_size)
 {

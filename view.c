@@ -11,7 +11,7 @@ void view_user_tables(enum app_event event)
             break;
 
         case EVENT_CURSOR_DOWN:
-            if (cursor->row < table->column_data->cell_count -1) {
+            if (cursor->row < table->columns->cell_count -1) {
                 ++cursor->row;
             }
             break;

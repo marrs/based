@@ -51,41 +51,53 @@
  *     NULL
  */
 
-enum dytype {
-    DYTYPE_NULL = 0,
-    DYTYPE_INT,
-    DYTYPE_FLOAT,
-    DYTYPE_TEXT,
-    DYTYPE_BLOB,
-};
+#include "data-model.h"
 
-typedef struct data_cell {
-    enum dytype type;
-    size_t raw_size;
-    size_t str_size;
-    char *str_data;
-    void *raw_data;
-} Data_Cell;
+void init_app_memory_pool(App_Memory_Pool *pool)
+{
+    pool->table_count = 0;
+    pool->dymem_tables = dymem_init(sizeof(Data_Table));
+    pool->tables = (Data_Table *)pool->dymem_tables->data;
+}
 
-typedef struct data_column {
-    int cell_count;  // Number of cells in column (exc. name).
-    char *name;
-    Dymem *dymem_cells;
-} Data_Column;
+Data_Table *mem_pool_allocate_data_table(App_Memory_Pool *pool, int col_count)
+{
+    Data_Table *table = (Data_Table *)dymem_allocate(pool->dymem_tables, sizeof(Data_Table));
+    ++pool->table_count;
 
-typedef struct data_table {
-    int col_count;
-    Data_Column *column_data;
-} Data_Table;
+    table->col_count = col_count;
+    table->data_mem = (Data_Memory *)dymem_init(MB(2));
+    table->data_mem->dymem_bin_data = dymem_init(MB(2));
+    table->data_mem->dymem_str_data = dymem_init(MB(2));
+    table->data_mem->dymem_meta_data = dymem_init(KB(1));
+    table->dymem_columns = dymem_init(sizeof(Data_Column) * 10);
+    table->columns = (Data_Column *)table->dymem_columns->data;
+    return table;
+}
 
-typedef struct data_cursor {
-    Data_Table *data_table;
-    int row_idx;
-    int col_idx;
-} Data_Cursor;
+Data_Column *data_table_allocate_column(Data_Table *table, int col_name_len)
+{
+    Data_Column *column = (Data_Column *)dymem_allocate(table->dymem_columns, sizeof(Data_Column));
+    column->name = dymem_allocate(
+            table->data_mem->dymem_meta_data,
+            col_name_len + 1);
+    column->dymem_cells = dymem_init(sizeof(Data_Cell) * 200);
+    column->cells = (Data_Cell *)column->dymem_cells->data;
 
+    return column;
+}
 
+Data_Cell *data_column_allocate_cell(Data_Column *column)
+{
+    Data_Cell *cell = (Data_Cell *)dymem_allocate(column->dymem_cells, sizeof(Data_Cell));
+    ++column->cell_count;
+
+    return cell;
+}
+
+// TODO: Implement way to release memory.
 Data_Cell *init_data_cell_from_sqlite_row(
+        Data_Memory *mem,
         Data_Cell *datacell,
         sqlite3_stmt *stmt,
         int col_idx)
@@ -98,7 +110,7 @@ Data_Cell *init_data_cell_from_sqlite_row(
             datacell->type = DYTYPE_NULL;
 
             datacell->str_size = 4;
-            datacell->str_data = (char *)dymem_allocate(global_db_str_mem, datacell->str_size + 1);
+            datacell->str_data = (char *)dymem_allocate(mem->dymem_str_data, datacell->str_size + 1);
             strcpy(datacell->str_data, "NULL");
 
             datacell->raw_size = 0;
@@ -109,10 +121,10 @@ Data_Cell *init_data_cell_from_sqlite_row(
             datacell->type = DYTYPE_INT;
 
             datacell->raw_size = sizeof(int);
-            datacell->raw_data = (int *)dymem_allocate(global_db_bin_mem, datacell->raw_size);
+            datacell->raw_data = (int *)dymem_allocate(mem->dymem_bin_data, datacell->raw_size);
             *(int *)datacell->raw_data = sqlite3_column_int(stmt, col_idx);
 
-            datacell->str_data = (char *)dymem_allocate(global_db_str_mem, TEXT_LEN_FOR_LARGEST_INT);
+            datacell->str_data = (char *)dymem_allocate(mem->dymem_str_data, TEXT_LEN_FOR_LARGEST_INT);
             strcpy(datacell->str_data, sqlite3_column_text(stmt, col_idx));
             datacell->str_size = strlen(datacell->str_data);
             break;
@@ -121,10 +133,10 @@ Data_Cell *init_data_cell_from_sqlite_row(
             datacell->type = DYTYPE_FLOAT;
 
             datacell->raw_size = sizeof(double);
-            datacell->raw_data = (double *)dymem_allocate(global_db_bin_mem, datacell->raw_size);
+            datacell->raw_data = (double *)dymem_allocate(mem->dymem_bin_data, datacell->raw_size);
             *(double *)datacell->raw_data = sqlite3_column_double(stmt, col_idx);
 
-            datacell->str_data = (char *)dymem_allocate(global_db_str_mem, TEXT_LEN_FOR_LARGEST_FLOAT);
+            datacell->str_data = (char *)dymem_allocate(mem->dymem_str_data, TEXT_LEN_FOR_LARGEST_FLOAT);
             strcpy(datacell->str_data, (char *)sqlite3_column_text(stmt, col_idx));
             datacell->str_size = strlen(datacell->str_data);
 
@@ -134,11 +146,11 @@ Data_Cell *init_data_cell_from_sqlite_row(
             datacell->type = DYTYPE_BLOB;
 
             datacell->str_size = 4;
-            datacell->str_data = (char *)dymem_allocate(global_db_str_mem, datacell->str_size + 1);
+            datacell->str_data = (char *)dymem_allocate(mem->dymem_str_data, datacell->str_size + 1);
             strcpy(datacell->str_data, "BLOB");
 
             datacell->raw_size = sqlite3_column_bytes(stmt, col_idx);
-            datacell->raw_data = (void *)dymem_allocate(global_db_bin_mem, datacell->raw_size);
+            datacell->raw_data = (void *)dymem_allocate(mem->dymem_bin_data, datacell->raw_size);
             memcpy(datacell->raw_data, sqlite3_column_blob(stmt, col_idx), datacell->raw_size);
             break;
 
@@ -149,7 +161,7 @@ Data_Cell *init_data_cell_from_sqlite_row(
             datacell->raw_size = datacell->str_size + 1;
             datacell->raw_data = NULL;
 
-            datacell->str_data = (char *)dymem_allocate(global_db_str_mem, datacell->raw_size);
+            datacell->str_data = (char *)dymem_allocate(mem->dymem_str_data, datacell->raw_size);
             strcpy(datacell->str_data, sqlite3_column_text(stmt, col_idx));
             break;
 
@@ -160,7 +172,7 @@ Data_Cell *init_data_cell_from_sqlite_row(
             datacell->raw_data = NULL;
 
             datacell->str_size = 7;
-            datacell->str_data = (char *)dymem_allocate(global_db_str_mem, datacell->str_size + 1);
+            datacell->str_data = (char *)dymem_allocate(mem->dymem_str_data, datacell->str_size + 1);
             strcpy(datacell->str_data, "UNKNOWN");
     }
 
@@ -170,27 +182,6 @@ Data_Cell *init_data_cell_from_sqlite_row(
 void *init_data_column(Data_Column *datacol)
 {
     datacol->cell_count = 0;
-    datacol->dymem_cells = dymem_init(200 * sizeof(Data_Cell));
-
-    // FIXME: Temporary hack ahead of proper memory management
-    datacol->name = (char *)malloc(255);
-}
-
-Data_Table *new_data_table(int col_count)
-{
-    Data_Table *datatable = (Data_Table *)malloc(sizeof(Data_Table));
-
-    datatable->col_count = col_count;
-
-    datatable->column_data = (Data_Column *)malloc(sizeof(Data_Column) * col_count);
-
-    loop (idx, datatable->col_count) {
-        init_data_column(&datatable->column_data[idx]);
-    }
-
-    datatable->column_data;
-
-    return datatable;
 }
 
 void populate_data_table_from_sqlite(Data_Table *table, sqlite3 *db, sqlite3_stmt *stmt)
@@ -203,7 +194,8 @@ void populate_data_table_from_sqlite(Data_Table *table, sqlite3 *db, sqlite3_stm
 
     // Populate column names
     loop (idx, table->col_count) {
-        column = &table->column_data[idx];
+        Data_Column *column = data_table_allocate_column(table, strlen(sqlite3_column_name(stmt, idx)));
+        init_data_column(column);
         strcpy(column->name, sqlite3_column_name(stmt, idx));
     }
 
@@ -214,11 +206,9 @@ void populate_data_table_from_sqlite(Data_Table *table, sqlite3 *db, sqlite3_stm
             for (cursor.row_idx = 0;
             cursor.row_idx < table->col_count;
             ++cursor.row_idx) {
-                Data_Column *column = &table->column_data[cursor.row_idx];
-                cell = (Data_Cell *)dymem_allocate(column->dymem_cells, sizeof(Data_Cell));
-                ++column->cell_count;
-
-                init_data_cell_from_sqlite_row(cell, stmt, cursor.row_idx);
+                Data_Column *column = &table->columns[cursor.row_idx];
+                cell = data_column_allocate_cell(column);
+                init_data_cell_from_sqlite_row(table->data_mem, cell, stmt, cursor.row_idx);
             }
         } else {
             switch (status) {

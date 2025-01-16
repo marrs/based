@@ -83,8 +83,8 @@ int main(int argc, char **argv)
     int err = 0;
     Cursor cursor = { 0 };
 
-    global_db_str_mem = dymem_init(MB(2));
-    global_db_bin_mem = dymem_init(MB(2));
+    App_Memory_Pool *mempool = (App_Memory_Pool *)malloc(sizeof(App_Memory_Pool));
+    init_app_memory_pool(mempool);
 
     if (argc > 1) {
         err = sqlite3_open_v2(argv[1], &db, SQLITE_OPEN_READONLY, 0);
@@ -96,11 +96,6 @@ int main(int argc, char **argv)
         fprintf(stderr, "Exiting: no sqlite database provided\n");
         goto exit;
     }
-
-    // Init curses
-	initscr();
-    start_color();
-    init_pair(1, COLOR_BLACK, COLOR_BLUE);  // Cursor colours.
 
     printw("Ncurses Test\n");
 
@@ -116,7 +111,7 @@ int main(int argc, char **argv)
 
         // Populate models.
         int col_count = sqlite3_column_count(stmt);
-        Data_Table *table = new_data_table(col_count);
+        Data_Table *table = mem_pool_allocate_data_table(mempool, col_count);
         populate_data_table_from_sqlite(table, db, stmt);
         global_app_state.user_tables.table = table;
 
@@ -124,8 +119,13 @@ int main(int argc, char **argv)
         sqlite3_finalize(stmt);
     }
 
+    // Init curses
+    initscr();
+    start_color();
+    init_pair(1, COLOR_BLACK, COLOR_BLUE);  // Cursor colours.
     clear();
     noecho();
+
     app_event_dispatcher(EVENT_INIT_VIEW);
 
     char input_ch;

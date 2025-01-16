@@ -11,7 +11,7 @@ void table_widget(Data_Table *table, Cursor *cursor)
 
     mvprintw(0, 0, "Column count: %d\n", table->col_count);
     loop(col_idx, table->col_count) {
-        column = &table->column_data[col_idx];
+        column = &table->columns[col_idx];
 
         // Display table header.
         attron(A_BOLD);
@@ -22,7 +22,7 @@ void table_widget(Data_Table *table, Cursor *cursor)
         attroff(A_BOLD);
 
         // Display table data.
-        cell = (Data_Cell *)column->dymem_cells->data;
+        cell = (Data_Cell *)column->cells;
         loop (idx, column->cell_count) {
             mvprintw(
                     table_layout.offset + 1 + idx,
@@ -36,8 +36,8 @@ void table_widget(Data_Table *table, Cursor *cursor)
     // Display table cursor.
     attron(COLOR_PAIR(1));
         loop(col_idx, table->col_count) {
-            column = &table->column_data[col_idx];
-            cell = (Data_Cell *)column->dymem_cells->data;
+            column = &table->columns[col_idx];
+            cell = (Data_Cell *)column->cells;
             cell += cursor->row;
             mvprintw(
                     table_layout.offset + 1 + cursor->row,
