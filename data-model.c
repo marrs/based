@@ -1,65 +1,55 @@
 /* Data Model
  * ==========
  *
- *  Objects associated with storing and managing the
- *  data fetched from various resources used by the app.
+ *  Objects associated with storing and managing the data fetched from various
+ *  resources used by the app.
  *
  *  Data_Table
  *  ----------
  *
  *  Supports the view for rendering tabular data.
  *
- *  Optimised for reading data by column, not row.
- *  This is preferred because table layout will be based on
- *  column width.
+ *  Optimised for reading data by column, not row.  This is preferred because
+ *  table layout will be based on column width.
  *
- *  Data is fetched from the SQL database and then transferred to
- *  an internal memory store.  This consists of 2 global dymem buffers,
- *  one for the original data, and one for the string representation.
- *  Text is stored in the string buffer.
+ *  The memory for the db data is managed by App_Memory_Pool, which stores all
+ *  the data associated with a single table/view in Data_Memory.  The data are
+ *  accessed via the Data_Table struct members.  The memory pool can store
+ *  multiple such collections.
  *
- *  Refernces to these data are found in Data_Cell objects.  These are
- *  stored in an array representing their columns.
+ *  Data queried from the SQL database is copied to Data_Memory.  Text data are
+ *  copied straight to str_data.  Binary data are stored in raw_data, but a
+ *  string representation is also kept in str_data.  Only the contents of
+ *  str_data will be displayed to the user.
  *
- *  While the Data_Cell objects are stored contiguously by column, their
- *  data are stored by row.  This is because there is only one memory buffer
- *  and data fetched from the database is written row by row.
- *  It may improve performance to group the data by column as well.
- *  This would require a pool of buffers, one per column.
+ *  Refernces to these data are found in Data_Cell objects.  These are stored
+ *  in an array representing their columns.
  *
- *  Currently, the db data are stored in global buffers, while the Data_Cell
- *  indices are stored in buffers located in the Data_Column objects.
+ *  While the Data_Cell objects are stored contiguously by column, their data
+ *  are stored by row.  This is because there is only one memory buffer and
+ *  data fetched from the database is written row by row.  It may improve
+ *  performance to group the data by column as well.  This would require a pool
+ *  of buffers, one per column.
  *
- *  This is inconsistent and confusing.  I'm considering a single memory
- *  layer (architecturally speaking) to handle the storage of all data, with
- *  the the Data_* structs sitting above.  Memory would be accessed via the
- *  structs, but managed by the data layer.
+ *  The cell value type will be stored in Data_Cell in case we wish to work
+ *  with the original types.
  *
- *  We also have some RAII (currently denoted by functions prefixed with
- *  `new_`, but sometimes also `init_`(!), which I want to get rid of.
+ *  From https://sqlite.org/c3ref/c_blob.html: Every value in SQLite has one of
+ *  five fundamental datatypes:
  *
- *  The cell value type will be stored in Data_Cell in case
- *  we wish to work with the original types.
- *
- *  From https://sqlite.org/c3ref/c_blob.html:
- *    Every value in SQLite has one of five fundamental datatypes:
- *
- *     64-bit signed integer
- *     64-bit IEEE floating point number
- *     string
- *     BLOB
- *     NULL
+ *     64-bit signed integer 64-bit IEEE floating point number string BLOB NULL
  */
 
 void init_app_memory_pool(App_Memory_Pool *pool)
 {
     pool->table_count = 0;
-    pool->dymem_tables = dymem_init(sizeof(Data_Table));
+    pool->dymem_tables = dymem_init(sizeof(Data_Table) * 3);
     pool->tables = (Data_Table *)pool->dymem_tables->data;
 }
 
 Data_Table *mem_pool_allocate_data_table(App_Memory_Pool *pool, int col_count)
 {
+    printf("sizeof data_table %d\n", sizeof(Data_Table));
     Data_Table *table = (Data_Table *)dymem_allocate(pool->dymem_tables, sizeof(Data_Table));
     ++pool->table_count;
 
@@ -209,6 +199,7 @@ void populate_data_table_from_sqlite(Data_Table *table, sqlite3 *db, sqlite3_stm
                 init_data_cell_from_sqlite_row(table->data_mem, cell, stmt, cursor.row_idx);
             }
         } else {
+            // TODO: Roll these messages into the event loop so we can see them in the status bar.
             switch (status) {
             case SQLITE_DONE: printw("Success: Done.\n"); break;
             case SQLITE_MISUSE:
@@ -227,6 +218,7 @@ int prepare_query_for_user_tables(sqlite3 *db, sqlite3_stmt **stmt, char *sql)
     int err = 0;
     err = sqlite3_prepare_v2(db, sql, -1, stmt, NULL);
     if (err) {
+        // TODO: Roll this message into the event loop so we can see it in the status bar.
         printw("Error preparing statement: %s\n", sqlite3_errmsg(db));
     }
     return err;

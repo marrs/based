@@ -29,11 +29,16 @@ Dymem *dymem_init(size_t page_size)
     return mem;
 }
 
+// FIXME: Cursor will point to invalid address on realloc.
+// Pages need to be implemented.
 void *dymem_allocate(struct dymem *mem, size_t len)
 {
     void *cursor = mem->cursor;
 
     if (mem->used + len > mem->size) {
+        if (len > mem->page_size) {
+            mem->page_size = len;
+        }
         mem->size += mem->page_size;
         mem->data = (void *)realloc(mem->data, mem->size);
     }

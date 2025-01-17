@@ -20,6 +20,7 @@ int load_table_with_data(Data_Table **target_table, char *sql)
 
     // Populate models.
     int col_count = sqlite3_column_count(stmt);
+    printf("COL COUNT %d\n", col_count);
     Data_Table *table = mem_pool_allocate_data_table(global_mempool, col_count);
     populate_data_table_from_sqlite(table, db, stmt);
     *target_table = table;
@@ -75,8 +76,12 @@ start:
         } break;
 
         case UI_EVENT_CURSOR_RIGHT: {
-            //Event event = (Event){ EVENT_VIEW_TABLE, DYTYPE_TEXT, cell_value(cursor) };
-            event = (Event){ APP_EVENT_LOAD_SELECTED_TABLE, DYTYPE_TEXT, .data_as_text = "table_name" };
+            event = (Event){
+                APP_EVENT_LOAD_SELECTED_TABLE,
+                DYTYPE_TEXT,
+                .data_as_text = table_view->table->columns[1].cells[cursor->row].str_data,
+            };
+    endwin();
             goto start;
         } break;
     }

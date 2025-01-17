@@ -41,11 +41,8 @@ int main(int argc, char **argv)
     global_app_state.user_tables.cursor = (View_Cursor){ 0, 0 };
     global_app_state.user_tables.table = NULL;
 
-    Data_Table temp_selected_table = {
-        0, "temp_table_name", NULL, NULL, NULL
-    };
     global_app_state.selected_table.cursor = (View_Cursor){ 0, 0 };
-    global_app_state.selected_table.table = &temp_selected_table;
+    global_app_state.selected_table.table = NULL;
 
     sqlite3 *db = NULL;
     int err = 0;
