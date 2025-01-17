@@ -49,7 +49,6 @@ void init_app_memory_pool(App_Memory_Pool *pool)
 
 Data_Table *mem_pool_allocate_data_table(App_Memory_Pool *pool, int col_count)
 {
-    printf("sizeof data_table %d\n", sizeof(Data_Table));
     Data_Table *table = (Data_Table *)dymem_allocate(pool->dymem_tables, sizeof(Data_Table));
     ++pool->table_count;
 

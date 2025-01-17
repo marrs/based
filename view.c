@@ -1,5 +1,9 @@
 void view_table(View_Table_Model model)
 {
+    clear();
+    attron(A_BOLD);
+        mvprintw(2, 1, "%s", model.table->name);
+    attroff(A_BOLD);
     table_widget(model.table, model.cursor);
 
     char help_msg[255] = "Options are (q)uit and (e)dit.\n";

@@ -36,13 +36,15 @@ int shut_down(sqlite3 *db)
 int main(int argc, char **argv)
 {
     // Init app state:
-    global_app_state.current_view = APP_VIEW_USER_TABLES;
+    global_app_state.current_view = APP_VIEW_TABLE;
 
     global_app_state.user_tables.cursor = (View_Cursor){ 0, 0 };
     global_app_state.user_tables.table = NULL;
 
     global_app_state.selected_table.cursor = (View_Cursor){ 0, 0 };
     global_app_state.selected_table.table = NULL;
+
+    global_app_state.current_table = &global_app_state.user_tables;
 
     sqlite3 *db = NULL;
     int err = 0;
@@ -62,14 +64,7 @@ int main(int argc, char **argv)
     }
     global_app_state.db = db;
 
-    printw("Ncurses Test\n");
-
-    // Init curses
-    initscr();
-    start_color();
-    init_pair(1, COLOR_BLACK, COLOR_BLUE);  // Cursor colours.
-    clear();
-    noecho();
+    enable_curses();
 
     Event event = (Event){ APP_EVENT_LOAD_USER_TABLES, DYTYPE_NULL, .data_as_null = NULL };
     dispatch_event(event);

@@ -40,8 +40,7 @@ typedef struct data_cursor {
 } Data_Cursor;
 
 enum app_view_id {
-    APP_VIEW_USER_TABLES = 0,
-    APP_VIEW_SELECTED_TABLE,
+    APP_VIEW_TABLE = 0,
     APP_VIEW_SELECTED_RECORD,
 };
 
@@ -60,6 +59,7 @@ typedef struct app_model {
     enum app_view_id current_view;
     Table_View user_tables;
     Table_View selected_table;
+    Table_View *current_table;
     /*
     struct {
         Cursor cursor;
