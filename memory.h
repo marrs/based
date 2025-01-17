@@ -5,4 +5,3 @@ typedef struct dymem {
     void *cursor;
     void *data;
 } Dymem;
-

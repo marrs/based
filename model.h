@@ -56,6 +56,7 @@ typedef struct table_view {
 } Table_View;
 
 typedef struct app_model {
+    sqlite3 *db;
     enum app_view_id current_view;
     Table_View user_tables;
     Table_View selected_table;
@@ -68,3 +69,4 @@ typedef struct app_model {
 } App_Model;
 
 App_Model global_app_state;
+App_Memory_Pool *global_mempool;

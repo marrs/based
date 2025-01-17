@@ -221,3 +221,13 @@ void populate_data_table_from_sqlite(Data_Table *table, sqlite3 *db, sqlite3_stm
         }
     }
 }
+
+int prepare_query_for_user_tables(sqlite3 *db, sqlite3_stmt **stmt, char *sql)
+{
+    int err = 0;
+    err = sqlite3_prepare_v2(db, sql, -1, stmt, NULL);
+    if (err) {
+        printw("Error preparing statement: %s\n", sqlite3_errmsg(db));
+    }
+    return err;
+}

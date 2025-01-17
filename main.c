@@ -16,7 +16,6 @@
 #include "util.c"
 #include "memory.c"
 #include "data-model.c"
-
 #include "widgets.c"
 #include "view.c"
 #include "event.c"
@@ -34,28 +33,25 @@ int shut_down(sqlite3 *db)
     exit(0);
 }
 
-int prepare_query_for_user_tables(sqlite3 *db, sqlite3_stmt **stmt, char *sql)
-{
-    int err = 0;
-    err = sqlite3_prepare_v2(db, sql, -1, stmt, NULL);
-    if (err) {
-        printw("Error preparing statement: %s\n", sqlite3_errmsg(db));
-    }
-    return err;
-}
-
 int main(int argc, char **argv)
 {
     // Init app state:
     global_app_state.current_view = APP_VIEW_USER_TABLES;
+
+    global_app_state.user_tables.cursor = (View_Cursor){ 0, 0 };
     global_app_state.user_tables.table = NULL;
+
+    Data_Table temp_selected_table = {
+        0, "temp_table_name", NULL, NULL, NULL
+    };
+    global_app_state.selected_table.cursor = (View_Cursor){ 0, 0 };
+    global_app_state.selected_table.table = &temp_selected_table;
 
     sqlite3 *db = NULL;
     int err = 0;
-    View_Cursor cursor = { 0, 0 };
 
-    App_Memory_Pool *mempool = (App_Memory_Pool *)malloc(sizeof(App_Memory_Pool));
-    init_app_memory_pool(mempool);
+    global_mempool = (App_Memory_Pool *)malloc(sizeof(App_Memory_Pool));
+    init_app_memory_pool(global_mempool);
 
     if (argc > 1) {
         err = sqlite3_open_v2(argv[1], &db, SQLITE_OPEN_READONLY, 0);
@@ -67,28 +63,9 @@ int main(int argc, char **argv)
         fprintf(stderr, "Exiting: no sqlite database provided\n");
         goto exit;
     }
+    global_app_state.db = db;
 
     printw("Ncurses Test\n");
-
-    // Query db for user tables
-    {
-        // Query data.
-        sqlite3_stmt *stmt;
-        char sql[255] = "select schema, name, type, ncol, wr, strict "
-                        "from pragma_table_list;";
-
-        err = prepare_query_for_user_tables(db, &stmt, sql);
-        if (err) goto exit;
-
-        // Populate models.
-        int col_count = sqlite3_column_count(stmt);
-        Data_Table *table = mem_pool_allocate_data_table(mempool, col_count);
-        populate_data_table_from_sqlite(table, db, stmt);
-        global_app_state.user_tables.table = table;
-
-        // Cleanup
-        sqlite3_finalize(stmt);
-    }
 
     // Init curses
     initscr();
@@ -97,7 +74,7 @@ int main(int argc, char **argv)
     clear();
     noecho();
 
-    Event event = { EVENT_INIT_VIEW, DYTYPE_NULL, .data_as_null = NULL };
+    Event event = (Event){ EVENT_LOAD_USER_TABLES, DYTYPE_NULL, .data_as_null = NULL };
     dispatch_event(event);
 
     char input_ch;
