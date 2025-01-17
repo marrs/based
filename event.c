@@ -35,48 +35,48 @@ void dispatch_event(Event event)
 
 start:
     switch (event.id) {
-        case EVENT_LOAD_USER_TABLES: {
+        case APP_EVENT_LOAD_USER_TABLES: {
             char sql[255] = "select schema, name, type, ncol, wr, strict "
                             "from pragma_table_list;";
             int err = load_table_with_data(&global_app_state.user_tables.table, sql);
             if (err) return; // TODO: Deal with this meaningfully.
 
-            event = (Event){ EVENT_VIEW_TABLE, DYTYPE_INT, .data_as_int = APP_VIEW_USER_TABLES};
+            event = (Event){ APP_EVENT_VIEW_TABLE, DYTYPE_INT, .data_as_int = APP_VIEW_USER_TABLES};
             goto start;
         } break;
 
-        case EVENT_LOAD_SELECTED_TABLE: {
+        case APP_EVENT_LOAD_SELECTED_TABLE: {
             char sql[255];
             sprintf(sql, "select * from %s;", event.data_as_text);
             int err = load_table_with_data(&global_app_state.selected_table.table, sql);
             if (err) return; // TODO: Deal with this meaningfully.
 
-            event = (Event){ EVENT_VIEW_TABLE, DYTYPE_INT, .data_as_int = APP_VIEW_SELECTED_TABLE};
+            event = (Event){ APP_EVENT_VIEW_TABLE, DYTYPE_INT, .data_as_int = APP_VIEW_SELECTED_TABLE};
             goto start;
         } break;
 
-        case EVENT_VIEW_TABLE:
+        case APP_EVENT_VIEW_TABLE:
             global_app_state.current_view = event.data_as_int;
 
             table_view = table_under_current_view();
             cursor = &table_view->cursor;
             break;
 
-        case EVENT_CURSOR_UP: {
+        case UI_EVENT_CURSOR_UP: {
             if (cursor->row > 0) {
                 --cursor->row;
             }
         } break;
 
-        case EVENT_CURSOR_DOWN: {
+        case UI_EVENT_CURSOR_DOWN: {
             if (cursor->row < table_view->table->columns->cell_count -1) {
                 ++cursor->row;
             }
         } break;
 
-        case EVENT_CURSOR_RIGHT: {
+        case UI_EVENT_CURSOR_RIGHT: {
             //Event event = (Event){ EVENT_VIEW_TABLE, DYTYPE_TEXT, cell_value(cursor) };
-            event = (Event){ EVENT_LOAD_SELECTED_TABLE, DYTYPE_TEXT, .data_as_text = "table_name" };
+            event = (Event){ APP_EVENT_LOAD_SELECTED_TABLE, DYTYPE_TEXT, .data_as_text = "table_name" };
             goto start;
         } break;
     }

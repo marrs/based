@@ -74,24 +74,24 @@ int main(int argc, char **argv)
     clear();
     noecho();
 
-    Event event = (Event){ EVENT_LOAD_USER_TABLES, DYTYPE_NULL, .data_as_null = NULL };
+    Event event = (Event){ APP_EVENT_LOAD_USER_TABLES, DYTYPE_NULL, .data_as_null = NULL };
     dispatch_event(event);
 
     char input_ch;
     while (input_ch = getch()) {
         switch (input_ch) {
             case 'j':
-                event = (Event){ EVENT_CURSOR_DOWN, DYTYPE_NULL, .data_as_null = NULL };
+                event = (Event){ UI_EVENT_CURSOR_DOWN, DYTYPE_NULL, .data_as_null = NULL };
                 dispatch_event(event);
                 break;
 
             case 'k':
-                event = (Event){ EVENT_CURSOR_UP, DYTYPE_NULL, .data_as_null = NULL };
+                event = (Event){ UI_EVENT_CURSOR_UP, DYTYPE_NULL, .data_as_null = NULL };
                 dispatch_event(event);
                 break;
 
             case 'l':
-                event = (Event){ EVENT_CURSOR_RIGHT, DYTYPE_NULL, .data_as_null = NULL };
+                event = (Event){ UI_EVENT_CURSOR_RIGHT, DYTYPE_NULL, .data_as_null = NULL };
                 dispatch_event(event);
                 break;
 
