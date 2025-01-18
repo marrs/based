@@ -1,16 +1,20 @@
 record:
   -
     name: Task
-    value: Read the HTML and CSS specs.
+    value:
+      Read the HTML and CSS specs.
 
   -
     name: Flags
-    value: Important
+    value:
+      Important
 
   -
     name: Estimate
-    value: 2
+    value:
+      2
 
   -
     name: Person
-    value: Neil
+    value:
+      Neil
