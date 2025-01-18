@@ -54,7 +54,7 @@ int main()
     Yaml_Data_Record *record;
 
 	/* Load input file. */
-	err = cyaml_load_file("test/basic-record.yml", &config,
+	err = cyaml_load_file("test/basic-record.cyml", &config,
 			&top_schema, (cyaml_data_t **)&record, NULL);
 	if (CYAML_OK != err) {
 		fprintf(stderr, "ERROR: %s\n", cyaml_strerror(err));
@@ -66,7 +66,7 @@ int main()
     Data_Field *field;
 	for (unsigned idx = 0; idx < record->fields_count; ++idx) {
         field = &record->fields[idx];
-		printf("    - %s: %s\n", field->name, field->value);
+		printf("  - %s: %s\n", field->name, field->value);
 	}
 
 	/* Free the data */
