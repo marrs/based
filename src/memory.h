@@ -34,4 +34,4 @@ typedef struct vector_iter {
     char *cursor;
 } Vector_Iter;
 
-#define vec_loop(vi, type, el) for ((el) = (type *)(vi->first_page->data); NULL != (el); vec_next((vi), (el)))
+#define vec_loop(vi, type, el) for ((el) = (type *)(vi->page->data); NULL != (el); (el) = (type *)vec_next((vi)))
