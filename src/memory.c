@@ -161,17 +161,23 @@ Vector *new_vector(const size_t el_size, const int el_count)
     return vec;
 }
 
-Vector_Iter *new_vec_iter(Vector *vec)
+void reset_vector_iter(Vector_Iter *veci)
+{
+    veci->page_offset = 0;
+    veci->step = 0;
+    veci->page = veci->first_page;
+    veci->cursor = veci->first_page->data;
+}
+
+Vector_Iter *new_vector_iter(Vector *vec)
 {
     Vector_Iter *veci = (Vector_Iter *)malloc(sizeof(Vector_Iter));
 
     veci->page_size = vec->page_size;
     veci->el_size = vec->el_size;
-    veci->page_offset = 0;
-    veci->step = 0;
     veci->len = vec->len;
-    veci->page = vec->first_page;
-    veci->cursor = vec->first_page->data;
+    veci->first_page = vec->first_page;
+    reset_vector_iter(veci);
 
     return veci;
 }
@@ -187,9 +193,10 @@ void delete_vector(Vector *vec)
     free(vec);
 }
 
-void vec_push(Vector *vec, void *el_src)
+void *vec_push_empty(Vector *vec)
 {
-    memcpy(vec->page_cursor->cursor, (char *)el_src, vec->el_size);
+    void *cursor = vec->page_cursor->cursor;
+
     vec->page_cursor->used += vec->el_size;
     ++vec->len;
     if (vec->page_cursor->used >= vec->page_cursor->size) {
@@ -207,6 +214,14 @@ void vec_push(Vector *vec, void *el_src)
         assert(vec->page_cursor->used <= vec->page_cursor->size - vec->el_size);
         vec->page_cursor->cursor += vec->el_size;
     }
+
+    return cursor;
+}
+
+void vec_push(Vector *vec, void *el_src)
+{
+    void *cursor = vec_push_empty(vec);
+    memcpy(cursor, (char *)el_src, vec->el_size);
 }
 
 void *vec_seek(Vector *vec, size_t idx)

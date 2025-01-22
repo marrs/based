@@ -25,7 +25,7 @@ int main()
         loop(idx, 10) {
             vec_push(vec, &idx);
         }
-        Vector_Iter *veci = new_vec_iter(vec);
+        Vector_Iter *veci = new_vector_iter(vec);
 
         it("iterates the elements of a vector until it reaches the end") {
             int *result;

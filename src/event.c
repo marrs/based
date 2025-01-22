@@ -10,8 +10,7 @@ int load_table_with_data(Data_Table **target_table, char *table_name, char *sql)
 
     // Populate models.
     int col_count = sqlite3_column_count(stmt);
-    Data_Table *table = mem_pool_allocate_data_table(global_mempool, col_count);
-    table->name = table_name;
+    Data_Table *table = new_data_table_from_table_pool(global_table_pool, table_name, col_count);
     populate_data_table_from_sqlite(table, db, stmt);
     *target_table = table;
 
@@ -57,16 +56,18 @@ start:
         } break;
 
         case UI_EVENT_CURSOR_DOWN: {
-            if (global_app_state.current_table->cursor.row < global_app_state.current_table->table->columns->cell_count -1) {
+            if (global_app_state.current_table->cursor.row < global_app_state.current_table->table->row_count -1) {
                 ++global_app_state.current_table->cursor.row;
             }
         } break;
 
         case UI_EVENT_CURSOR_RIGHT: {
+            Data_Column *col = (Data_Column *)vec_seek(global_app_state.current_table->table->column_vec, 1);
+            Data_Cell *cell = (Data_Cell *)vec_seek(col->cell_vec, global_app_state.current_table->cursor.row);
             event = (Event){
                 APP_EVENT_LOAD_SELECTED_TABLE,
                 DYTYPE_TEXT,
-                .data_as_text = global_app_state.current_table->table->columns[1].cells[global_app_state.current_table->cursor.row].str_data,
+                .data_as_text = cell->str_data,
             };
             goto start;
         } break;

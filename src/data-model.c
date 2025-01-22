@@ -12,7 +12,7 @@
  *  Optimised for reading data by column, not row.  This is preferred because
  *  table layout will be based on column width.
  *
- *  The memory for the db data is managed by App_Memory_Pool, which stores all
+ *  The memory for the db data is managed by Table_Pool, which stores all
  *  the data associated with a single table/view in Data_Memory.  The data are
  *  accessed via the Data_Table struct members.  The memory pool can store
  *  multiple such collections.
@@ -40,43 +40,43 @@
  *     64-bit signed integer 64-bit IEEE floating point number string BLOB NULL
  */
 
-void init_app_memory_pool(App_Memory_Pool *pool)
+void init_table_pool(Table_Pool *pool)
 {
     pool->table_count = 0;
-    pool->dymem_tables = dymem_init(sizeof(Data_Table) * 3);
-    pool->tables = (Data_Table *)pool->dymem_tables->data;
+    pool->table_vec = new_vector(sizeof(Data_Table), 3);
 }
 
-Data_Table *mem_pool_allocate_data_table(App_Memory_Pool *pool, int col_count)
+Data_Table *new_data_table_from_table_pool(Table_Pool *pool, char *name, int col_count)
 {
-    Data_Table *table = (Data_Table *)dymem_allocate(pool->dymem_tables, sizeof(Data_Table));
+    Data_Table *table = (Data_Table *)vec_push_empty(pool->table_vec);
     ++pool->table_count;
 
     table->col_count = col_count;
+    table->row_count = 0;
+    table->name = name;
     table->data_mem = (Data_Memory *)dymem_init(MB(2));
     table->data_mem->dymem_bin_data = dymem_init(MB(2));
     table->data_mem->dymem_str_data = dymem_init(MB(2));
     table->data_mem->dymem_meta_data = dymem_init(KB(1));
-    table->dymem_columns = dymem_init(sizeof(Data_Column) * 10);
-    table->columns = (Data_Column *)table->dymem_columns->data;
+    table->column_vec = new_vector(sizeof(Data_Column), 10);
     return table;
 }
 
-Data_Column *data_table_allocate_column(Data_Table *table, int col_name_len)
+Data_Column *new_column_from_data_table(Data_Table *table, const char *name, size_t name_len)
 {
-    Data_Column *column = (Data_Column *)dymem_allocate(table->dymem_columns, sizeof(Data_Column));
+    Data_Column *column = (Data_Column *)vec_push_empty(table->column_vec);
     column->name = dymem_allocate(
             table->data_mem->dymem_meta_data,
-            col_name_len + 1);
-    column->dymem_cells = dymem_init(sizeof(Data_Cell) * 200);
-    column->cells = (Data_Cell *)column->dymem_cells->data;
-
+            name_len + 1);
+    column->cell_vec = new_vector(sizeof(Data_Cell), 200);
+    column->cell_count = 0;
+    strcpy(column->name, name);
     return column;
 }
 
-Data_Cell *data_column_allocate_cell(Data_Column *column)
+Data_Cell *allocate_cell_from_data_column(Data_Column *column)
 {
-    Data_Cell *cell = (Data_Cell *)dymem_allocate(column->dymem_cells, sizeof(Data_Cell));
+    Data_Cell *cell = (Data_Cell *)vec_push_empty(column->cell_vec);
     ++column->cell_count;
 
     return cell;
@@ -84,12 +84,13 @@ Data_Cell *data_column_allocate_cell(Data_Column *column)
 
 // TODO: Implement way to release memory.
 Data_Cell *init_data_cell_from_sqlite_row(
-        Data_Memory *mem,
+        Data_Table *table,
         Data_Cell *datacell,
         sqlite3_stmt *stmt,
         int col_idx)
 {
 
+    Data_Memory *mem = table->data_mem;
     datacell->type = sqlite3_column_type(stmt, col_idx);
 
     switch (datacell->type) {
@@ -166,37 +167,35 @@ Data_Cell *init_data_cell_from_sqlite_row(
     return datacell;
 }
 
-void *init_data_column(Data_Column *datacol)
-{
-    datacol->cell_count = 0;
-}
-
 void populate_data_table_from_sqlite(Data_Table *table, sqlite3 *db, sqlite3_stmt *stmt)
 {
-
     int status = 0;
-    Data_Cursor cursor = { table, 0, 0 };
     Data_Column *column = NULL;
     Data_Cell *cell = NULL;
 
-    // Populate column names
+    // Create columns and populate their names.
     loop (idx, table->col_count) {
-        Data_Column *column = data_table_allocate_column(table, strlen(sqlite3_column_name(stmt, idx)));
-        init_data_column(column);
-        strcpy(column->name, sqlite3_column_name(stmt, idx));
+        Data_Column *column = new_column_from_data_table(
+            table,
+            sqlite3_column_name(stmt, idx),
+            strlen(sqlite3_column_name(stmt, idx))
+        );
     }
 
-    // Populate data
-    for (cursor.col_idx = 0; status = sqlite3_step(stmt); ++cursor.col_idx) {
+    // Populate data.
+    for (int col_idx = 0; status = sqlite3_step(stmt); ++col_idx) {
         if (SQLITE_ROW == status) {
-
-            for (cursor.row_idx = 0;
-            cursor.row_idx < table->col_count;
-            ++cursor.row_idx) {
-                Data_Column *column = &table->columns[cursor.row_idx];
-                cell = data_column_allocate_cell(column);
-                init_data_cell_from_sqlite_row(table->data_mem, cell, stmt, cursor.row_idx);
+            loop (row_idx, table->column_vec->len) {
+                Data_Column *column = vec_seek(table->column_vec, row_idx);
+                cell = allocate_cell_from_data_column(column);
+                init_data_cell_from_sqlite_row(
+                    table,
+                    cell,
+                    stmt,
+                    row_idx
+                );
             }
+            ++table->row_count;
         } else {
             // TODO: Roll these messages into the event loop so we can see them in the status bar.
             switch (status) {

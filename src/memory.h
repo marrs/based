@@ -30,6 +30,7 @@ typedef struct vector_iter {
     size_t page_offset;
     int step;
     int len;
+    Memory_Page *first_page;
     Memory_Page *page;
     char *cursor;
 } Vector_Iter;

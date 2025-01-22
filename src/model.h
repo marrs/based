@@ -9,8 +9,7 @@ typedef struct data_cell {
 typedef struct data_column {
     int cell_count;  // Number of cells in column (exc. name).
     char *name;
-    Dymem *dymem_cells;
-    Data_Cell *cells;
+    Vector *cell_vec;
 } Data_Column;
 
 typedef struct data_memory {
@@ -21,17 +20,16 @@ typedef struct data_memory {
 
 typedef struct data_table {
     int col_count;
+    int row_count;
     char *name;
-    Dymem *dymem_columns;
-    Data_Column *columns;
+    Vector *column_vec;
     Data_Memory *data_mem;
 } Data_Table;
 
-typedef struct app_memory_pool {
+typedef struct table_pool {
     int table_count;
-    Data_Table *tables;
-    Dymem *dymem_tables;
-} App_Memory_Pool;
+    Vector *table_vec;
+} Table_Pool;
 
 typedef struct data_cursor {
     Data_Table *data_table;
@@ -69,4 +67,4 @@ typedef struct app_model {
 } App_Model;
 
 App_Model global_app_state;
-App_Memory_Pool *global_mempool;
+Table_Pool *global_table_pool;

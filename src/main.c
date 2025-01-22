@@ -49,8 +49,8 @@ int main(int argc, char **argv)
     sqlite3 *db = NULL;
     int err = 0;
 
-    global_mempool = (App_Memory_Pool *)malloc(sizeof(App_Memory_Pool));
-    init_app_memory_pool(global_mempool);
+    global_table_pool = (Table_Pool *)malloc(sizeof(Table_Pool));
+    init_table_pool(global_table_pool);
 
     if (argc > 1) {
         err = sqlite3_open_v2(argv[1], &db, SQLITE_OPEN_READONLY, 0);
