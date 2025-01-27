@@ -221,3 +221,22 @@ int prepare_query_for_user_tables(sqlite3 *db, sqlite3_stmt **stmt, char *sql)
     }
     return err;
 }
+
+int new_table_with_data_from_sqlite(Data_Table **target_table, char *table_name, char *sql)
+{
+    // Query data.
+    sqlite3 *db = global_app_state.db;
+    sqlite3_stmt *stmt;
+
+    int err = prepare_query_for_user_tables(db, &stmt, sql);
+    if (err) return err;
+
+    // Populate models.
+    int col_count = sqlite3_column_count(stmt);
+    Data_Table *table = new_data_table_from_table_pool(global_table_pool, table_name, col_count);
+    populate_data_table_from_sqlite(table, db, stmt);
+    *target_table = table;
+
+    // Cleanup
+    sqlite3_finalize(stmt);
+}
