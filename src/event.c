@@ -6,7 +6,7 @@ start:
         case APP_EVENT_LOAD_USER_TABLES: {
             char sql[255] = "select schema, name, type, ncol, wr, strict "
                             "from pragma_table_list;";
-            int err = new_table_with_data_from_sqlite(&global_app_state.user_tables.table, "Available tables", sql);
+            int err = new_table_with_query_using_sqlite(&global_app_state.user_tables.table, "Available tables", sql);
             if (err) return; // TODO: Deal with this meaningfully.
 
             global_app_state.current_table = &global_app_state.user_tables;
@@ -16,8 +16,7 @@ start:
 
         case APP_EVENT_LOAD_SELECTED_TABLE: {
             char sql[255];
-            sprintf(sql, "select * from %s;", event.data_as_text);
-            int err = new_table_with_data_from_sqlite(&global_app_state.selected_table.table, event.data_as_text, sql);
+            int err = new_table_with_data_using_sqlite(&global_app_state.selected_table.table, event.data_as_text);
             if (err) return; // TODO: Deal with this meaningfully.
 
             global_app_state.current_table = &global_app_state.selected_table;

@@ -30,7 +30,7 @@ int shut_down(sqlite3 *db)
         printf("done.\n");
     }
     endwin();
-    exit(0);
+    exit(err);
 }
 
 int main(int argc, char **argv)

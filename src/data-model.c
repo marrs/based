@@ -74,6 +74,20 @@ Data_Column *new_column_from_data_table(Data_Table *table, const char *name, siz
     return column;
 }
 
+Data_Column *column_by_name_from_data_table(Data_Table *table, const char *name)
+{
+    Vector_Iter *iter = new_vector_iter(table->column_vec);
+    Data_Column *col = NULL;
+
+    vec_loop (iter, Data_Column, col) {
+        if (name == col->name) {
+            return col;
+        }
+    }
+
+    return NULL;
+}
+
 Data_Cell *allocate_cell_from_data_column(Data_Column *column)
 {
     Data_Cell *cell = (Data_Cell *)vec_push_empty(column->cell_vec);
@@ -83,7 +97,7 @@ Data_Cell *allocate_cell_from_data_column(Data_Column *column)
 }
 
 // TODO: Implement way to release memory.
-Data_Cell *init_data_cell_from_sqlite_row(
+Data_Cell *init_data_cell_using_sqlite_row(
         Data_Table *table,
         Data_Cell *datacell,
         sqlite3_stmt *stmt,
@@ -167,11 +181,9 @@ Data_Cell *init_data_cell_from_sqlite_row(
     return datacell;
 }
 
-void populate_data_table_from_sqlite(Data_Table *table, sqlite3 *db, sqlite3_stmt *stmt)
+void new_columns_from_data_table_using_sqlite(Data_Table *table, sqlite3 *db, sqlite3_stmt *stmt)
 {
-    int status = 0;
     Data_Column *column = NULL;
-    Data_Cell *cell = NULL;
 
     // Create columns and populate their names.
     loop (idx, table->col_count) {
@@ -181,6 +193,26 @@ void populate_data_table_from_sqlite(Data_Table *table, sqlite3 *db, sqlite3_stm
             strlen(sqlite3_column_name(stmt, idx))
         );
     }
+}
+
+void handle_sqlite_step_status(sqlite3 *db, int status)
+{
+    // TODO: Roll these messages into the event loop so we can see them in the status bar.
+    switch (status) {
+    case SQLITE_DONE: printw("Success: Done.\n"); break;
+    case SQLITE_MISUSE:
+        printw("Error (SQLITE_MISUSE) stepping through statement: %s\n", sqlite3_errmsg(db));
+        break;
+    default:
+        printw("Error (%d) stepping through statement: %s\n", status, sqlite3_errmsg(db));
+    }
+}
+
+void populate_data_table_using_sqlite(Data_Table *table, sqlite3 *db, sqlite3_stmt *stmt)
+{
+    int status = 0;
+    Data_Column *column = NULL;
+    Data_Cell *cell = NULL;
 
     // Populate data.
     for (int col_idx = 0; status = sqlite3_step(stmt); ++col_idx) {
@@ -188,7 +220,7 @@ void populate_data_table_from_sqlite(Data_Table *table, sqlite3 *db, sqlite3_stm
             loop (row_idx, table->column_vec->len) {
                 Data_Column *column = vec_seek(table->column_vec, row_idx);
                 cell = allocate_cell_from_data_column(column);
-                init_data_cell_from_sqlite_row(
+                init_data_cell_using_sqlite_row(
                     table,
                     cell,
                     stmt,
@@ -196,22 +228,11 @@ void populate_data_table_from_sqlite(Data_Table *table, sqlite3 *db, sqlite3_stm
                 );
             }
             ++table->row_count;
-        } else {
-            // TODO: Roll these messages into the event loop so we can see them in the status bar.
-            switch (status) {
-            case SQLITE_DONE: printw("Success: Done.\n"); break;
-            case SQLITE_MISUSE:
-                printw("Error (SQLITE_MISUSE) stepping through statement: %s\n", sqlite3_errmsg(db));
-                break;
-            default:
-                printw("Error (%d) stepping through statement: %s\n", status, sqlite3_errmsg(db));
-            }
-            break;
-        }
+        } else { handle_sqlite_step_status(db, status); break; }
     }
 }
 
-int prepare_query_for_user_tables(sqlite3 *db, sqlite3_stmt **stmt, char *sql)
+int prepare_query_using_sqlite(sqlite3 *db, sqlite3_stmt **stmt, char *sql)
 {
     int err = 0;
     err = sqlite3_prepare_v2(db, sql, -1, stmt, NULL);
@@ -222,21 +243,79 @@ int prepare_query_for_user_tables(sqlite3 *db, sqlite3_stmt **stmt, char *sql)
     return err;
 }
 
-int new_table_with_data_from_sqlite(Data_Table **target_table, char *table_name, char *sql)
+int new_table_with_query_using_sqlite(Data_Table **target_table, char *table_name, char *sql)
 {
-    // Query data.
     sqlite3 *db = global_app_state.db;
-    sqlite3_stmt *stmt;
+    sqlite3_stmt *tbl_stmt;
 
-    int err = prepare_query_for_user_tables(db, &stmt, sql);
+    int err = prepare_query_using_sqlite(db, &tbl_stmt, sql);
     if (err) return err;
 
-    // Populate models.
-    int col_count = sqlite3_column_count(stmt);
+    int col_count = sqlite3_column_count(tbl_stmt);
     Data_Table *table = new_data_table_from_table_pool(global_table_pool, table_name, col_count);
-    populate_data_table_from_sqlite(table, db, stmt);
+
+    new_columns_from_data_table_using_sqlite(table, db, tbl_stmt);
+    populate_data_table_using_sqlite(table, db, tbl_stmt);
+    *target_table = table;
+
+    sqlite3_finalize(tbl_stmt);
+}
+
+int new_table_with_data_using_sqlite(Data_Table **target_table, char *table_name)
+{
+    char sql[255];
+    sqlite3 *db = global_app_state.db;
+    sqlite3_stmt *tbl_stmt = NULL;
+    sqlite3_stmt *rel_stmt = NULL;
+    int col_count = 0;
+    int err = 0;
+    int status = 0;
+
+    // Query data.
+    sprintf(sql, "select * from %s;", table_name);
+    err = prepare_query_using_sqlite(db, &tbl_stmt, sql);
+    if (err) return err;
+
+    sprintf(sql, "select `from`, `to`, `table` from pragma_foreign_key_list('%s');", table_name);
+    err = prepare_query_using_sqlite(db, &tbl_stmt, sql);
+    if (err) return err;
+
+    // Init table
+    col_count = sqlite3_column_count(tbl_stmt);
+    Data_Table *table = new_data_table_from_table_pool(global_table_pool, table_name, col_count);
+    new_columns_from_data_table_using_sqlite(table, db, tbl_stmt);
+
+    // Populate data
+    col_count = sqlite3_column_count(rel_stmt);
+    char field_data[255];
+    Data_Column *column = NULL;
+
+    for (int row_idx = 0; status = sqlite3_step(rel_stmt); ++row_idx) {
+        if (SQLITE_ROW == status) {
+
+            // For `from` column
+            strcpy(field_data, sqlite3_column_text(rel_stmt, 0));
+            column = column_by_name_from_data_table(table, field_data);
+            assert(NULL != column);
+
+            // For `to` column
+            strcpy(field_data, sqlite3_column_text(rel_stmt, 1));
+            err = new_table_with_data_using_sqlite(&column->fk_table, field_data);
+            if (err) return err;
+
+            // For `table` column
+            strcpy(field_data, sqlite3_column_text(rel_stmt, 2));
+            column->fk_column = column_by_name_from_data_table(column->fk_table, field_data);
+            assert(NULL != column);
+
+            ++table->row_count;
+        } else { handle_sqlite_step_status(db, status); break; }
+    }
+
+    populate_data_table_using_sqlite(table, db, tbl_stmt);
     *target_table = table;
 
     // Cleanup
-    sqlite3_finalize(stmt);
+    sqlite3_finalize(tbl_stmt);
+    sqlite3_finalize(rel_stmt);
 }

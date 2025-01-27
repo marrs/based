@@ -6,12 +6,6 @@ typedef struct data_cell {
     void *raw_data;
 } Data_Cell;
 
-typedef struct data_column {
-    int cell_count;  // Number of cells in column (exc. name).
-    char *name;
-    Vector *cell_vec;
-} Data_Column;
-
 typedef struct data_memory {
     Dymem *dymem_bin_data;
     Dymem *dymem_str_data;
@@ -25,6 +19,14 @@ typedef struct data_table {
     Vector *column_vec;
     Data_Memory *data_mem;
 } Data_Table;
+
+typedef struct data_column {
+    int cell_count;  // Number of cells in column (exc. name).
+    char *name;
+    Vector *cell_vec;
+    Data_Table *fk_table;
+    struct data_column *fk_column;
+} Data_Column;
 
 typedef struct table_pool {
     int table_count;
