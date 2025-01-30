@@ -23,9 +23,13 @@ typedef struct data_table {
 typedef struct data_column {
     int cell_count;  // Number of cells in column (exc. name).
     char *name;
-    Vector *cell_vec;
+    int type;
+    int is_not_null;
+    int is_pk;
+    int is_read_only;
     Data_Table *fk_table;
     struct data_column *fk_column;
+    Vector *cell_vec;
 } Data_Column;
 
 typedef struct table_pool {

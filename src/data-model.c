@@ -40,6 +40,18 @@
  *     64-bit signed integer 64-bit IEEE floating point number string BLOB NULL
  */
 
+int dytype_from_sqlite(int sqlite_type)
+{
+    switch (sqlite_type) {
+        case SQLITE_NULL: return DYTYPE_NULL;
+        case SQLITE_INTEGER: return DYTYPE_INT;
+        case SQLITE_FLOAT: return DYTYPE_FLOAT;
+        case SQLITE_BLOB: return DYTYPE_BLOB;
+        case SQLITE_TEXT: return DYTYPE_TEXT;
+        default: return DYTYPE_NULL;
+    }
+}
+
 void init_table_pool(Table_Pool *pool)
 {
     pool->table_count = 0;
@@ -62,17 +74,23 @@ Data_Table *new_data_table_from_table_pool(Table_Pool *pool, const char *name, i
     return table;
 }
 
-Data_Column *new_column_from_data_table(Data_Table *table, const char *name, size_t name_len)
+Data_Column *new_column_from_data_table(Data_Table *table, const int type, const char *name, size_t name_len)
 {
     Data_Column *column = (Data_Column *)vec_push_empty(table->column_vec);
     column->name = dymem_allocate(
             table->data_mem->dymem_meta_data,
             name_len + 1);
-    column->cell_vec = new_vector(sizeof(Data_Cell), 200);
-    column->cell_count = 0;
+    strcpy(column->name, name);
+    column->type = type;
+
+    column->is_not_null = 0;
+    column->is_pk = 0;
+    column->is_read_only = 0;
     column->fk_table = NULL;
     column->fk_column = NULL;
-    strcpy(column->name, name);
+
+    column->cell_vec = new_vector(sizeof(Data_Cell), 200);
+    column->cell_count = 0;
     return column;
 }
 
@@ -109,12 +127,10 @@ Data_Cell *new_cell_from_data_table_using_sqlite_row(
 {
     Data_Cell *datacell = allocate_cell_from_data_column(column);
     Data_Memory *mem = table->data_mem;
-    datacell->type = sqlite3_column_type(stmt, col_idx);
+    datacell->type = column->type;
 
     switch (datacell->type) {
-        case SQLITE_NULL:
-            datacell->type = DYTYPE_NULL;
-
+        case DYTYPE_NULL:
             datacell->str_size = 4;
             datacell->str_data = (char *)dymem_allocate(mem->dymem_str_data, datacell->str_size + 1);
             strcpy(datacell->str_data, "NULL");
@@ -123,9 +139,7 @@ Data_Cell *new_cell_from_data_table_using_sqlite_row(
             datacell->raw_data = NULL;
             break;
 
-        case SQLITE_INTEGER:
-            datacell->type = DYTYPE_INT;
-
+        case DYTYPE_INT:
             datacell->raw_size = sizeof(int);
             datacell->raw_data = (int *)dymem_allocate(mem->dymem_bin_data, datacell->raw_size);
             *(int *)datacell->raw_data = sqlite3_column_int(stmt, col_idx);
@@ -135,9 +149,7 @@ Data_Cell *new_cell_from_data_table_using_sqlite_row(
             datacell->str_size = strlen(datacell->str_data);
             break;
 
-        case SQLITE_FLOAT:
-            datacell->type = DYTYPE_FLOAT;
-
+        case DYTYPE_FLOAT:
             datacell->raw_size = sizeof(double);
             datacell->raw_data = (double *)dymem_allocate(mem->dymem_bin_data, datacell->raw_size);
             *(double *)datacell->raw_data = sqlite3_column_double(stmt, col_idx);
@@ -148,9 +160,7 @@ Data_Cell *new_cell_from_data_table_using_sqlite_row(
 
 
             break;
-        case SQLITE_BLOB:
-            datacell->type = DYTYPE_BLOB;
-
+        case DYTYPE_BLOB:
             datacell->str_size = 4;
             datacell->str_data = (char *)dymem_allocate(mem->dymem_str_data, datacell->str_size + 1);
             strcpy(datacell->str_data, "BLOB");
@@ -160,9 +170,7 @@ Data_Cell *new_cell_from_data_table_using_sqlite_row(
             memcpy(datacell->raw_data, sqlite3_column_blob(stmt, col_idx), datacell->raw_size);
             break;
 
-        case SQLITE_TEXT:
-            datacell->type = DYTYPE_TEXT;
-
+        case DYTYPE_TEXT:
             datacell->str_size = sqlite3_column_bytes(stmt, col_idx);
             datacell->raw_size = datacell->str_size + 1;
             datacell->raw_data = NULL;
@@ -191,6 +199,7 @@ void new_columns_for_data_table_using_sqlite(Data_Table *table, sqlite3 *db, sql
     loop (idx, table->col_count) {
         new_column_from_data_table(
             table,
+            dytype_from_sqlite(sqlite3_column_type(stmt, idx)),
             sqlite3_column_name(stmt, idx),
             strlen(sqlite3_column_name(stmt, idx))
         );
@@ -219,13 +228,13 @@ void populate_data_table_using_sqlite(Data_Table *table, sqlite3 *db, sqlite3_st
     // Populate data.
     for (int col_idx = 0; status = sqlite3_step(stmt); ++col_idx) {
         if (SQLITE_ROW == status) {
-            loop (row_idx, table->column_vec->len) {
-                Data_Column *column = vec_seek(table->column_vec, row_idx);
+            loop (col_idx, table->col_count) {
+                Data_Column *column = vec_seek(table->column_vec, col_idx);
                 cell = new_cell_from_data_table_using_sqlite_row(
                     table,
                     column,
                     stmt,
-                    row_idx
+                    col_idx
                 );
             }
             ++table->row_count;
@@ -255,7 +264,11 @@ int new_table_with_query_using_sqlite(Data_Table **target_table, char *table_nam
     int col_count = sqlite3_column_count(tbl_stmt);
     Data_Table *table = new_data_table_from_table_pool(global_table_pool, table_name, col_count);
 
-    new_columns_for_data_table_using_sqlite(table, db, tbl_stmt);
+    // Load col data
+    sqlite3_step(tbl_stmt);
+        new_columns_for_data_table_using_sqlite(table, db, tbl_stmt);
+    sqlite3_reset(tbl_stmt);
+
     populate_data_table_using_sqlite(table, db, tbl_stmt);
     *target_table = table;
 
@@ -268,7 +281,8 @@ int new_table_with_data_using_sqlite(Data_Table **target_table, const char *tabl
 {
     char sql[255];
     sqlite3 *db = global_app_state.db;
-    sqlite3_stmt *tbl_stmt = NULL;
+    sqlite3_stmt *data_stmt = NULL;
+    sqlite3_stmt *meta_stmt = NULL;
     sqlite3_stmt *rel_stmt = NULL;
     int col_count = 0;
     int err = 0;
@@ -276,19 +290,25 @@ int new_table_with_data_using_sqlite(Data_Table **target_table, const char *tabl
 
     // Query data.
     sprintf(sql, "select * from %s;", table_name);
-    err = prepare_query_using_sqlite(db, &tbl_stmt, sql);
+    err = prepare_query_using_sqlite(db, &data_stmt, sql);
     if (err) { return err; }
 
     sprintf(sql, "select `from`, `to`, `table` from pragma_foreign_key_list('%s');", table_name);
     err = prepare_query_using_sqlite(db, &rel_stmt, sql);
     if (err) { return err; }
 
-    // Init table
-    col_count = sqlite3_column_count(tbl_stmt);
-    Data_Table *table = new_data_table_from_table_pool(global_table_pool, table_name, col_count);
-    new_columns_for_data_table_using_sqlite(table, db, tbl_stmt);
+    sprintf(sql, "select `name`, `notnull`, `pk` from pragma_table_info('%s')", table_name);
+    err = prepare_query_using_sqlite(db, &meta_stmt, sql);
+    if (err) { return err; }
 
-    // Populate data
+    // Init table
+    col_count = sqlite3_column_count(data_stmt);
+    sqlite3_step(data_stmt);
+        Data_Table *table = new_data_table_from_table_pool(global_table_pool, table_name, col_count);
+        new_columns_for_data_table_using_sqlite(table, db, data_stmt);
+    sqlite3_reset(data_stmt);
+
+    // Populate meta data
     Data_Column *column = NULL;
 
     for (int row_idx = 0; status = sqlite3_step(rel_stmt); ++row_idx) {
@@ -318,11 +338,38 @@ int new_table_with_data_using_sqlite(Data_Table **target_table, const char *tabl
         } else { handle_sqlite_step_status(db, status); break; }
     }
 
-    populate_data_table_using_sqlite(table, db, tbl_stmt);
+    for (int row_idx = 0; status = sqlite3_step(meta_stmt); ++row_idx) {
+        if (SQLITE_ROW == status) {
+
+            // For `name` column
+            column = column_by_name_from_data_table(
+                table,
+                sqlite3_column_text(meta_stmt, 0)
+            );
+            assert(NULL != column);
+
+            // For `notnull` column
+            column->is_not_null = sqlite3_column_int(meta_stmt, 1);
+
+            // For `pk` column
+            column->is_pk = sqlite3_column_int(meta_stmt, 2);
+
+            if (column->is_pk
+            &&  column->is_not_null
+            &&  DYTYPE_INT == column->type) {
+                column->is_read_only = 1;
+            }
+
+
+        } else { handle_sqlite_step_status(db, status); break; }
+    }
+
+    populate_data_table_using_sqlite(table, db, data_stmt);
     *target_table = table;
 
     // Cleanup
-    sqlite3_finalize(tbl_stmt);
+    sqlite3_finalize(data_stmt);
+    sqlite3_finalize(meta_stmt);
     sqlite3_finalize(rel_stmt);
 
     return 0;
