@@ -46,7 +46,7 @@ void init_table_pool(Table_Pool *pool)
     pool->table_vec = new_vector(sizeof(Data_Table), 3);
 }
 
-Data_Table *new_data_table_from_table_pool(Table_Pool *pool, char *name, int col_count)
+Data_Table *new_data_table_from_table_pool(Table_Pool *pool, const char *name, int col_count)
 {
     Data_Table *table = (Data_Table *)vec_push_empty(pool->table_vec);
     ++pool->table_count;
@@ -70,6 +70,8 @@ Data_Column *new_column_from_data_table(Data_Table *table, const char *name, siz
             name_len + 1);
     column->cell_vec = new_vector(sizeof(Data_Cell), 200);
     column->cell_count = 0;
+    column->fk_table = NULL;
+    column->fk_column = NULL;
     strcpy(column->name, name);
     return column;
 }
@@ -80,11 +82,13 @@ Data_Column *column_by_name_from_data_table(Data_Table *table, const char *name)
     Data_Column *col = NULL;
 
     vec_loop (iter, Data_Column, col) {
-        if (name == col->name) {
+        if (0 == strcmp(name, col->name)) {
+            delete_vector_iter(iter);
             return col;
         }
     }
 
+    delete_vector_iter(iter);
     return NULL;
 }
 
@@ -97,13 +101,13 @@ Data_Cell *allocate_cell_from_data_column(Data_Column *column)
 }
 
 // TODO: Implement way to release memory.
-Data_Cell *init_data_cell_using_sqlite_row(
+Data_Cell *new_cell_from_data_table_using_sqlite_row(
         Data_Table *table,
-        Data_Cell *datacell,
+        Data_Column *column,
         sqlite3_stmt *stmt,
         int col_idx)
 {
-
+    Data_Cell *datacell = allocate_cell_from_data_column(column);
     Data_Memory *mem = table->data_mem;
     datacell->type = sqlite3_column_type(stmt, col_idx);
 
@@ -181,13 +185,11 @@ Data_Cell *init_data_cell_using_sqlite_row(
     return datacell;
 }
 
-void new_columns_from_data_table_using_sqlite(Data_Table *table, sqlite3 *db, sqlite3_stmt *stmt)
+void new_columns_for_data_table_using_sqlite(Data_Table *table, sqlite3 *db, sqlite3_stmt *stmt)
 {
-    Data_Column *column = NULL;
-
     // Create columns and populate their names.
     loop (idx, table->col_count) {
-        Data_Column *column = new_column_from_data_table(
+        new_column_from_data_table(
             table,
             sqlite3_column_name(stmt, idx),
             strlen(sqlite3_column_name(stmt, idx))
@@ -219,10 +221,9 @@ void populate_data_table_using_sqlite(Data_Table *table, sqlite3 *db, sqlite3_st
         if (SQLITE_ROW == status) {
             loop (row_idx, table->column_vec->len) {
                 Data_Column *column = vec_seek(table->column_vec, row_idx);
-                cell = allocate_cell_from_data_column(column);
-                init_data_cell_using_sqlite_row(
+                cell = new_cell_from_data_table_using_sqlite_row(
                     table,
-                    cell,
+                    column,
                     stmt,
                     row_idx
                 );
@@ -254,14 +255,16 @@ int new_table_with_query_using_sqlite(Data_Table **target_table, char *table_nam
     int col_count = sqlite3_column_count(tbl_stmt);
     Data_Table *table = new_data_table_from_table_pool(global_table_pool, table_name, col_count);
 
-    new_columns_from_data_table_using_sqlite(table, db, tbl_stmt);
+    new_columns_for_data_table_using_sqlite(table, db, tbl_stmt);
     populate_data_table_using_sqlite(table, db, tbl_stmt);
     *target_table = table;
 
     sqlite3_finalize(tbl_stmt);
+
+    return 0;
 }
 
-int new_table_with_data_using_sqlite(Data_Table **target_table, char *table_name)
+int new_table_with_data_using_sqlite(Data_Table **target_table, const char *table_name)
 {
     char sql[255];
     sqlite3 *db = global_app_state.db;
@@ -274,41 +277,44 @@ int new_table_with_data_using_sqlite(Data_Table **target_table, char *table_name
     // Query data.
     sprintf(sql, "select * from %s;", table_name);
     err = prepare_query_using_sqlite(db, &tbl_stmt, sql);
-    if (err) return err;
+    if (err) { return err; }
 
     sprintf(sql, "select `from`, `to`, `table` from pragma_foreign_key_list('%s');", table_name);
-    err = prepare_query_using_sqlite(db, &tbl_stmt, sql);
-    if (err) return err;
+    err = prepare_query_using_sqlite(db, &rel_stmt, sql);
+    if (err) { return err; }
 
     // Init table
     col_count = sqlite3_column_count(tbl_stmt);
     Data_Table *table = new_data_table_from_table_pool(global_table_pool, table_name, col_count);
-    new_columns_from_data_table_using_sqlite(table, db, tbl_stmt);
+    new_columns_for_data_table_using_sqlite(table, db, tbl_stmt);
 
     // Populate data
-    col_count = sqlite3_column_count(rel_stmt);
-    char field_data[255];
     Data_Column *column = NULL;
 
     for (int row_idx = 0; status = sqlite3_step(rel_stmt); ++row_idx) {
         if (SQLITE_ROW == status) {
 
             // For `from` column
-            strcpy(field_data, sqlite3_column_text(rel_stmt, 0));
-            column = column_by_name_from_data_table(table, field_data);
+            column = column_by_name_from_data_table(
+                table,
+                sqlite3_column_text(rel_stmt, 0)
+            );
             assert(NULL != column);
-
-            // For `to` column
-            strcpy(field_data, sqlite3_column_text(rel_stmt, 1));
-            err = new_table_with_data_using_sqlite(&column->fk_table, field_data);
-            if (err) return err;
 
             // For `table` column
-            strcpy(field_data, sqlite3_column_text(rel_stmt, 2));
-            column->fk_column = column_by_name_from_data_table(column->fk_table, field_data);
+            err = new_table_with_data_using_sqlite(
+                &column->fk_table,
+                sqlite3_column_text(rel_stmt, 2)
+            );
+            if (err) { return err; }
+
+            // For `to` column
+            column->fk_column = column_by_name_from_data_table(
+                column->fk_table,
+                sqlite3_column_text(rel_stmt, 1)
+            );
             assert(NULL != column);
 
-            ++table->row_count;
         } else { handle_sqlite_step_status(db, status); break; }
     }
 
@@ -318,4 +324,6 @@ int new_table_with_data_using_sqlite(Data_Table **target_table, char *table_name
     // Cleanup
     sqlite3_finalize(tbl_stmt);
     sqlite3_finalize(rel_stmt);
+
+    return 0;
 }

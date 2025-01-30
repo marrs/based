@@ -15,7 +15,7 @@ typedef struct data_memory {
 typedef struct data_table {
     int col_count;
     int row_count;
-    char *name;
+    const char *name;
     Vector *column_vec;
     Data_Memory *data_mem;
 } Data_Table;
@@ -58,8 +58,8 @@ typedef struct app_model {
     sqlite3 *db;
     enum app_view_id current_view;
     Table_View user_tables;
-    Table_View selected_table;
-    Table_View *current_table;
+    Vector *loaded_table_vec;
+    Table_View *current_table_view;
     /*
     struct {
         Cursor cursor;

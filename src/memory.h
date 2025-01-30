@@ -19,6 +19,7 @@ typedef struct dymem {
 typedef struct vector {
     size_t page_size;
     size_t el_size;
+    size_t page_el_count;
     int len;
     Memory_Page *first_page;
     Memory_Page *page_cursor;
@@ -35,4 +36,4 @@ typedef struct vector_iter {
     char *cursor;
 } Vector_Iter;
 
-#define vec_loop(vi, type, el) for ((el) = (type *)(vi->page->data); NULL != (el); (el) = (type *)vec_next((vi)))
+#define vec_loop(vi, type, el) for ((el) = (type *)(vi->cursor); NULL != (el); (el) = (type *)vec_next((vi)))

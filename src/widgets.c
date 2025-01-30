@@ -9,8 +9,7 @@ void table_widget(Data_Table *table, View_Cursor *cursor)
     Data_Column *column = NULL;
     Data_Cell *cell = NULL;
 
-    mvprintw(0, 0, "Column count: %d\n", table->col_count);
-    mvprintw(1, 0, "Row count: %d\n", table->row_count);
+    mvprintw(0, 0, "%d columns, %d rows.\n", table->col_count, table->row_count);
     int col_idx = 0;
     Vector_Iter *col_iter = new_vector_iter(table->column_vec);
     vec_loop (col_iter, Data_Column, column) {
@@ -39,15 +38,18 @@ void table_widget(Data_Table *table, View_Cursor *cursor)
     // Display table cursor.
     attron(COLOR_PAIR(1));
         col_idx = 0;
-        vec_loop (col_iter, Data_Column, column) {
-            cell = (Data_Cell *)vec_seek(column->cell_vec, cursor->row);
-            mvprintw(
-                    table_layout.offset + 1 + cursor->row,
-                    1 + table_layout.column_width * col_idx,
-                    " %s\n",
-                    cell->str_data);
-            ++col_idx;
-        } delete_vector_iter(col_iter);
+        if (table->row_count) {
+            vec_loop (col_iter, Data_Column, column) {
+                cell = (Data_Cell *)vec_seek(column->cell_vec, cursor->row);
+                mvprintw(
+                        table_layout.offset + 1 + cursor->row,
+                        1 + table_layout.column_width * col_idx,
+                        " %s\n",
+                        cell->str_data);
+                ++col_idx;
+            }
+        }
+        delete_vector_iter(col_iter);
     attroff(COLOR_PAIR(1));
 }
 

@@ -41,10 +41,9 @@ int main(int argc, char **argv)
     global_app_state.user_tables.cursor = (View_Cursor){ 0, 0 };
     global_app_state.user_tables.table = NULL;
 
-    global_app_state.selected_table.cursor = (View_Cursor){ 0, 0 };
-    global_app_state.selected_table.table = NULL;
+    global_app_state.loaded_table_vec = new_vector(sizeof(Table_View), 20);
 
-    global_app_state.current_table = &global_app_state.user_tables;
+    global_app_state.current_table_view = &global_app_state.user_tables;
 
     sqlite3 *db = NULL;
     int err = 0;
