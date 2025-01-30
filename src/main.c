@@ -19,7 +19,6 @@
 #include "data-model.c"
 #include "widgets.c"
 #include "view.c"
-#include "event.c"
 
 int shut_down(sqlite3 *db)
 {
@@ -33,6 +32,8 @@ int shut_down(sqlite3 *db)
     endwin();
     exit(err);
 }
+
+#include "event.c"
 
 int main(int argc, char **argv)
 {
@@ -70,43 +71,12 @@ int main(int argc, char **argv)
     enable_curses();
 
     Event event = (Event){ APP_EVENT_LOAD_USER_TABLES, DYTYPE_NULL, .data_as_null = NULL };
-    dispatch_event(event);
+    dispatch_app_event(event);
 
     char input_ch;
     while (input_ch = getch()) {
-        switch (input_ch) {
-            case 'j':
-                event = (Event){ UI_EVENT_CURSOR_DOWN, DYTYPE_NULL, .data_as_null = NULL };
-                dispatch_event(event);
-                break;
-
-            case 'k':
-                event = (Event){ UI_EVENT_CURSOR_UP, DYTYPE_NULL, .data_as_null = NULL };
-                dispatch_event(event);
-                break;
-
-            case 'l':
-                event = (Event){ UI_EVENT_CURSOR_RIGHT, DYTYPE_NULL, .data_as_null = NULL };
-                dispatch_event(event);
-                break;
-
-            case 'q': {
-                  goto exit;
-            } break;
-            case 'e': {
-                pid_t pid = fork();
-
-                if (pid == 0) { // child
-                    char *args[] = {"/usr/bin/vim", NULL};
-                    execvp(args[0], args);
-                } else {        // parent
-                    int status;
-                    waitpid(pid, &status, 0);
-                    printw("Child process finished\n");
-                }
-            } break;
-            default: continue;
-        }
+        event = (Event){ UI_EVENT_KEY_PRESS, DYTYPE_CHAR, .data_as_char = input_ch };
+        dispatch_ui_event(event);
     }
 
 exit:
