@@ -14,11 +14,16 @@ void table_widget(Data_Table *table, View_Cursor *cursor)
     Vector_Iter *col_iter = new_vector_iter(table->column_vec);
     vec_loop (col_iter, Data_Column, column) {
         // Display table header.
+        char key_symbol[] = "(PK) ";
+        // TODO:
+        // - Enable utf8 so that the key symbol can be printed
+        //   - u8"🔑";
+        //   - "\0x1F511";
         attron(A_BOLD);
             mvprintw(
                     table_layout.offset,
                     table_layout.column_width * col_idx,
-                    "  %s\n", column->name);
+                    "  %s%s\n", column->is_pk? key_symbol : "", column->name);
         attroff(A_BOLD);
 
         // Display table data.

@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <sys/wait.h>
 #include <string.h>
+#include <locale.h>
 
 #include <ncurses.h>
 #include <sqlite3.h>
@@ -35,6 +36,9 @@ int shut_down(sqlite3 *db)
 
 int main(int argc, char **argv)
 {
+
+    setlocale(LC_ALL, "");
+
     // Init app state:
     global_app_state.current_view = APP_VIEW_TABLE;
 
