@@ -60,6 +60,13 @@ void table_widget(Data_Table *table, View_Cursor *cursor)
         }
         delete_vector_iter(col_iter);
     attroff(COLOR_PAIR(1));
+
+    if (!table->row_count) {
+        attron(A_BOLD);
+            mvprintw(table_layout.offset + 4, 12, "No records\n");
+        attroff(A_BOLD);
+        mvprintw(table_layout.offset + 6, 12, "Type 'c' to create a new record\n");
+    }
 }
 
 void status_bar_widget(char *msg)
