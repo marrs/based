@@ -1,58 +1,58 @@
-typedef struct data_cell {
+typedef struct table_cell {
     enum dytype type;
     size_t raw_size;
     size_t str_size;
     char *str_data;
     void *raw_data;
-} Data_Cell;
+} Table_Cell;
 
-typedef struct data_memory {
+typedef struct table_memory {
     Dymem *dymem_bin_data;
     Dymem *dymem_str_data;
     Dymem *dymem_meta_data;
-} Data_Memory;
+} Table_Memory;
 
-typedef struct data_table {
+typedef struct table {
     int col_count;
     int row_count;
     const char *name;
     Vector *column_vec;
-    Data_Memory *data_mem;
-} Data_Table;
+    Table_Memory *data_mem;
+} Table;
 
-typedef struct data_column {
+typedef struct table_column {
     int cell_count;  // Number of cells in column (exc. name).
     char *name;
     int type;
     int is_not_null;
     int is_pk;
     int is_read_only;
-    Data_Table *fk_table;
-    struct data_column *fk_column;
+    Table *fk_table;
+    struct table_column *fk_column;
     Vector *cell_vec;
-} Data_Column;
+} Table_Column;
 
-typedef struct data_field {
+typedef struct record_field {
     char *name;
     char *value;
-} Data_Field;
+} Record_Field;
 
-typedef struct data_record {
+typedef struct record {
     int field_count;
     Vector *field_vec;
     Dymem *dymem_data;
-} Data_Record;
+} Record;
 
 typedef struct table_pool {
     int table_count;
     Vector *table_vec;
 } Table_Pool;
 
-typedef struct data_cursor {
-    Data_Table *data_table;
+typedef struct table_cursor {
+    Table *table;
     int row_idx;
     int col_idx;
-} Data_Cursor;
+} Table_Cursor;
 
 enum app_view_id {
     APP_VIEW_TABLE = 0,
@@ -66,7 +66,7 @@ typedef struct view_cursor {
 
 typedef struct table_view {
     View_Cursor cursor;
-    Data_Table *table;
+    Table *table;
 } Table_View;
 
 typedef struct app_model {

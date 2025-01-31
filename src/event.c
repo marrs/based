@@ -34,7 +34,7 @@ start:
             break;
 
         case APP_EVENT_CREATE_RECORD: {
-            Data_Table *table = global_app_state.current_table_view->table;
+            Table *table = global_app_state.current_table_view->table;
             char *newrec_filename = "tmp_create_record.yml";
             FILE *file = fopen(newrec_filename, "w");
             if (!file) {
@@ -42,9 +42,9 @@ start:
                 fprintf(stderr, "Failed to open temp yaml file for writing: %s\n", newrec_filename);
             }
             Vector_Iter *iter = new_vector_iter(table->column_vec);
-            Data_Column *col = NULL;
+            Table_Column *col = NULL;
 
-            vec_loop (iter, Data_Column, col) {
+            vec_loop (iter, Table_Column, col) {
                 if (!col->is_read_only) {
                     fprintf(file, "%s:\n", col->name);
                 }
@@ -140,12 +140,12 @@ start:
         } break;
 
         case UI_EVENT_CURSOR_RIGHT: {
-            Data_Column *col
-                = (Data_Column *)
+            Table_Column *col
+                = (Table_Column *)
                   vec_seek(global_app_state.current_table_view->table->column_vec, 1);
 
-            Data_Cell *cell
-                = (Data_Cell *)
+            Table_Cell *cell
+                = (Table_Cell *)
                   vec_seek(
                           col->cell_vec,
                           global_app_state.current_table_view->cursor.row

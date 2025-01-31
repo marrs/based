@@ -3,16 +3,16 @@ typedef struct table_widget_layout {
     int column_width;
 } Table_Widget_Layout;
 
-void table_widget(Data_Table *table, View_Cursor *cursor)
+void table_widget(Table *table, View_Cursor *cursor)
 {
     Table_Widget_Layout table_layout = { 4, 20 };
-    Data_Column *column = NULL;
-    Data_Cell *cell = NULL;
+    Table_Column *column = NULL;
+    Table_Cell *cell = NULL;
 
     mvprintw(0, 0, "%d columns, %d rows.\n", table->col_count, table->row_count);
     int col_idx = 0;
     Vector_Iter *col_iter = new_vector_iter(table->column_vec);
-    vec_loop (col_iter, Data_Column, column) {
+    vec_loop (col_iter, Table_Column, column) {
         // Display table header.
         char pk_symbol[] = "(PK) ";
         char fk_symbol[] = "(FK) ";
@@ -33,7 +33,7 @@ void table_widget(Data_Table *table, View_Cursor *cursor)
         // Display table data.
         int cell_idx = 0;
         Vector_Iter *cell_iter = new_vector_iter(column->cell_vec);
-        vec_loop (cell_iter, Data_Cell, cell) {
+        vec_loop (cell_iter, Table_Cell, cell) {
             mvprintw(
                     table_layout.offset + 1 + cell_idx,
                     table_layout.column_width * col_idx,
@@ -48,8 +48,8 @@ void table_widget(Data_Table *table, View_Cursor *cursor)
     attron(COLOR_PAIR(1));
         col_idx = 0;
         if (table->row_count) {
-            vec_loop (col_iter, Data_Column, column) {
-                cell = (Data_Cell *)vec_seek(column->cell_vec, cursor->row);
+            vec_loop (col_iter, Table_Column, column) {
+                cell = (Table_Cell *)vec_seek(column->cell_vec, cursor->row);
                 mvprintw(
                         table_layout.offset + 1 + cursor->row,
                         1 + table_layout.column_width * col_idx,

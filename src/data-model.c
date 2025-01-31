@@ -4,34 +4,34 @@
  *  Objects associated with storing and managing the data fetched from various
  *  resources used by the app.
  *
- *  Data_Table
- *  ----------
+ *  Table
+ *  -----
  *
  *  Supports the view for rendering tabular data.
  *
  *  Optimised for reading data by column, not row.  This is preferred because
  *  table layout will be based on column width.
  *
- *  The memory for the db data is managed by Table_Pool, which stores all
- *  the data associated with a single table/view in Data_Memory.  The data are
- *  accessed via the Data_Table struct members.  The memory pool can store
- *  multiple such collections.
+ *  The memory for the db data is managed by Table_Pool, which stores all the
+ *  data associated with a single table/view in Table_Memory.  The data are
+ *  accessed via the Table struct members.  The memory pool can store multiple
+ *  such collections.
  *
- *  Data queried from the SQL database is copied to Data_Memory.  Text data are
+ *  Data queried from the SQL database is copied to Table_Memory.  Text data are
  *  copied straight to str_data.  Binary data are stored in raw_data, but a
  *  string representation is also kept in str_data.  Only the contents of
  *  str_data will be displayed to the user.
  *
- *  Refernces to these data are found in Data_Cell objects.  These are stored
+ *  Refernces to these data are found in Table_Cell objects.  These are stored
  *  in an array representing their columns.
  *
- *  While the Data_Cell objects are stored contiguously by column, their data
+ *  While the Table_Cell objects are stored contiguously by column, their data
  *  are stored by row.  This is because there is only one memory buffer and
  *  data fetched from the database is written row by row.  It may improve
  *  performance to group the data by column as well.  This would require a pool
  *  of buffers, one per column.
  *
- *  The cell value type will be stored in Data_Cell in case we wish to work
+ *  The cell value type will be stored in Table_Cell in case we wish to work
  *  with the original types.
  *
  *  From https://sqlite.org/c3ref/c_blob.html: Every value in SQLite has one of
@@ -78,45 +78,45 @@ char *sqlite3_type_as_str(int type)
 void init_table_pool(Table_Pool *pool)
 {
     pool->table_count = 0;
-    pool->table_vec = new_vector(sizeof(Data_Table), 3);
+    pool->table_vec = new_vector(sizeof(Table), 3);
 }
 
-Data_Record *new_data_record(int field_count)
+Record *new_record(int field_count)
 {
-    Data_Record *record = (Data_Record *)malloc(sizeof(Data_Record));
+    Record *record = (Record *)malloc(sizeof(Record));
     record->field_count = field_count;
-    record->field_vec = new_vector(sizeof(Data_Field), field_count);
+    record->field_vec = new_vector(sizeof(Record_Field), field_count);
     record->dymem_data = dymem_init(KB(128));
 
     return record;
 }
 
-void delete_data_record(Data_Record *record)
+void delete_record(Record *record)
 {
     delete_vector(record->field_vec);
     dymem_free(record->dymem_data);
     free(record);
 }
 
-Data_Table *new_data_table_from_table_pool(Table_Pool *pool, const char *name, int col_count)
+Table *new_table_from_table_pool(Table_Pool *pool, const char *name, int col_count)
 {
-    Data_Table *table = (Data_Table *)vec_push_empty(pool->table_vec);
+    Table *table = (Table *)vec_push_empty(pool->table_vec);
     ++pool->table_count;
 
     table->col_count = col_count;
     table->row_count = 0;
     table->name = name;
-    table->data_mem = (Data_Memory *)malloc(sizeof(Data_Memory));
+    table->data_mem = (Table_Memory *)malloc(sizeof(Table_Memory));
     table->data_mem->dymem_bin_data = dymem_init(MB(2));
     table->data_mem->dymem_str_data = dymem_init(MB(2));
     table->data_mem->dymem_meta_data = dymem_init(KB(1));
-    table->column_vec = new_vector(sizeof(Data_Column), 10);
+    table->column_vec = new_vector(sizeof(Table_Column), 10);
     return table;
 }
 
-Data_Column *new_column_from_data_table(Data_Table *table, const int type, const char *name, size_t name_len)
+Table_Column *new_column_from_table(Table *table, const int type, const char *name, size_t name_len)
 {
-    Data_Column *column = (Data_Column *)vec_push_empty(table->column_vec);
+    Table_Column *column = (Table_Column *)vec_push_empty(table->column_vec);
     column->name = dymem_allocate(
             table->data_mem->dymem_meta_data,
             name_len + 1);
@@ -129,17 +129,17 @@ Data_Column *new_column_from_data_table(Data_Table *table, const int type, const
     column->fk_table = NULL;
     column->fk_column = NULL;
 
-    column->cell_vec = new_vector(sizeof(Data_Cell), 200);
+    column->cell_vec = new_vector(sizeof(Table_Cell), 200);
     column->cell_count = 0;
     return column;
 }
 
-Data_Column *column_by_name_from_data_table(Data_Table *table, const char *name)
+Table_Column *column_by_name_from_table(Table *table, const char *name)
 {
     Vector_Iter *iter = new_vector_iter(table->column_vec);
-    Data_Column *col = NULL;
+    Table_Column *col = NULL;
 
-    vec_loop (iter, Data_Column, col) {
+    vec_loop (iter, Table_Column, col) {
         if (0 == strcmp(name, col->name)) {
             delete_vector_iter(iter);
             return col;
@@ -150,23 +150,23 @@ Data_Column *column_by_name_from_data_table(Data_Table *table, const char *name)
     return NULL;
 }
 
-Data_Cell *allocate_cell_from_data_column(Data_Column *column)
+Table_Cell *allocate_cell_from_table_column(Table_Column *column)
 {
-    Data_Cell *cell = (Data_Cell *)vec_push_empty(column->cell_vec);
+    Table_Cell *cell = (Table_Cell *)vec_push_empty(column->cell_vec);
     ++column->cell_count;
 
     return cell;
 }
 
 // TODO: Implement way to release memory.
-Data_Cell *new_cell_from_data_table_using_sqlite_row(
-        Data_Table *table,
-        Data_Column *column,
+Table_Cell *new_cell_from_table_using_sqlite_row(
+        Table *table,
+        Table_Column *column,
         sqlite3_stmt *stmt,
         int col_idx)
 {
-    Data_Cell *datacell = allocate_cell_from_data_column(column);
-    Data_Memory *mem = table->data_mem;
+    Table_Cell *datacell = allocate_cell_from_table_column(column);
+    Table_Memory *mem = table->data_mem;
     datacell->type = dytype_from_sqlite(sqlite3_column_type(stmt, col_idx));
 
     switch (datacell->type) {
@@ -233,11 +233,11 @@ Data_Cell *new_cell_from_data_table_using_sqlite_row(
     return datacell;
 }
 
-void new_columns_for_data_table_using_sqlite(Data_Table *table, sqlite3 *db, sqlite3_stmt *stmt)
+void new_columns_for_table_using_sqlite(Table *table, sqlite3 *db, sqlite3_stmt *stmt)
 {
     // Create columns and populate their names.
     loop (idx, table->col_count) {
-        new_column_from_data_table(
+        new_column_from_table(
             table,
             // XXX
             // Sqlite does not provide a decltype for pragma tables (apparently).
@@ -263,18 +263,18 @@ void handle_sqlite_step_status(sqlite3 *db, int status)
     }
 }
 
-void populate_data_table_using_sqlite(Data_Table *table, sqlite3 *db, sqlite3_stmt *stmt)
+void populate_table_using_sqlite(Table *table, sqlite3 *db, sqlite3_stmt *stmt)
 {
     int status = 0;
-    Data_Column *column = NULL;
-    Data_Cell *cell = NULL;
+    Table_Column *column = NULL;
+    Table_Cell *cell = NULL;
 
     // Populate data.
     for (int col_idx = 0; status = sqlite3_step(stmt); ++col_idx) {
         if (SQLITE_ROW == status) {
             loop (col_idx, table->col_count) {
-                Data_Column *column = vec_seek(table->column_vec, col_idx);
-                cell = new_cell_from_data_table_using_sqlite_row(
+                Table_Column *column = vec_seek(table->column_vec, col_idx);
+                cell = new_cell_from_table_using_sqlite_row(
                     table,
                     column,
                     stmt,
@@ -297,7 +297,7 @@ int prepare_query_using_sqlite(sqlite3 *db, sqlite3_stmt **stmt, char *sql)
     return err;
 }
 
-int new_table_with_query_using_sqlite(Data_Table **target_table, char *table_name, char *sql)
+int new_table_with_query_using_sqlite(Table **target_table, char *table_name, char *sql)
 {
     sqlite3 *db = global_app_state.db;
     sqlite3_stmt *tbl_stmt;
@@ -306,12 +306,12 @@ int new_table_with_query_using_sqlite(Data_Table **target_table, char *table_nam
     if (err) return err;
 
     int col_count = sqlite3_column_count(tbl_stmt);
-    Data_Table *table = new_data_table_from_table_pool(global_table_pool, table_name, col_count);
+    Table *table = new_table_from_table_pool(global_table_pool, table_name, col_count);
 
     // Load col data
-    new_columns_for_data_table_using_sqlite(table, db, tbl_stmt);
+    new_columns_for_table_using_sqlite(table, db, tbl_stmt);
 
-    populate_data_table_using_sqlite(table, db, tbl_stmt);
+    populate_table_using_sqlite(table, db, tbl_stmt);
     *target_table = table;
 
     sqlite3_finalize(tbl_stmt);
@@ -319,7 +319,7 @@ int new_table_with_query_using_sqlite(Data_Table **target_table, char *table_nam
     return 0;
 }
 
-int new_table_with_data_using_sqlite(Data_Table **target_table, const char *table_name)
+int new_table_with_data_using_sqlite(Table **target_table, const char *table_name)
 {
     char sql[255];
     sqlite3 *db = global_app_state.db;
@@ -345,17 +345,17 @@ int new_table_with_data_using_sqlite(Data_Table **target_table, const char *tabl
 
     // Init table
     col_count = sqlite3_column_count(data_stmt);
-    Data_Table *table = new_data_table_from_table_pool(global_table_pool, table_name, col_count);
-    new_columns_for_data_table_using_sqlite(table, db, data_stmt);
+    Table *table = new_table_from_table_pool(global_table_pool, table_name, col_count);
+    new_columns_for_table_using_sqlite(table, db, data_stmt);
 
     // Populate meta data
-    Data_Column *column = NULL;
+    Table_Column *column = NULL;
 
     for (int row_idx = 0; status = sqlite3_step(rel_stmt); ++row_idx) {
         if (SQLITE_ROW == status) {
 
             // For `from` column
-            column = column_by_name_from_data_table(
+            column = column_by_name_from_table(
                 table,
                 sqlite3_column_text(rel_stmt, 0)
             );
@@ -369,7 +369,7 @@ int new_table_with_data_using_sqlite(Data_Table **target_table, const char *tabl
             if (err) { return err; }
 
             // For `to` column
-            column->fk_column = column_by_name_from_data_table(
+            column->fk_column = column_by_name_from_table(
                 column->fk_table,
                 sqlite3_column_text(rel_stmt, 1)
             );
@@ -382,7 +382,7 @@ int new_table_with_data_using_sqlite(Data_Table **target_table, const char *tabl
         if (SQLITE_ROW == status) {
 
             // For `name` column
-            column = column_by_name_from_data_table(
+            column = column_by_name_from_table(
                 table,
                 sqlite3_column_text(meta_stmt, 0)
             );
@@ -404,7 +404,7 @@ int new_table_with_data_using_sqlite(Data_Table **target_table, const char *tabl
         } else { handle_sqlite_step_status(db, status); break; }
     }
 
-    populate_data_table_using_sqlite(table, db, data_stmt);
+    populate_table_using_sqlite(table, db, data_stmt);
     *target_table = table;
 
     // Cleanup

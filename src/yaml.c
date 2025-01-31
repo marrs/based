@@ -115,7 +115,7 @@ int convert_file_yaml_to_cyaml(char *y_filename, char *cy_filename)
     return 1;
 }
 
-Data_Record *new_record_from_cyaml_file(char *filename)
+Record *new_record_from_cyaml_file(char *filename)
 {
 	cyaml_err_t err;
     Cyaml_Record *crec;
@@ -127,19 +127,19 @@ Data_Record *new_record_from_cyaml_file(char *filename)
 		return NULL;
 	}
 
-    Data_Record *datarec = new_data_record(crec->fields_count);
-    Data_Field datafield = (Data_Field){ .name = NULL, .value = NULL };
+    Record *rec = new_record(crec->fields_count);
+    Record_Field datafield = (Record_Field){ .name = NULL, .value = NULL };
     Cyaml_Field *cfield = NULL;
     loop (idx, crec->fields_count) {
         cfield = &crec->fields[idx];
-        datafield.name = (char *)dymem_allocate(datarec->dymem_data, strlen(cfield->name) + 1);
-        datafield.value = (char *)dymem_allocate(datarec->dymem_data, strlen(cfield->value) + 1);
+        datafield.name = (char *)dymem_allocate(rec->dymem_data, strlen(cfield->name) + 1);
+        datafield.value = (char *)dymem_allocate(rec->dymem_data, strlen(cfield->value) + 1);
 
         strcpy(datafield.name, cfield->name);
         strcpy(datafield.value, cfield->value);
-        vec_push(datarec->field_vec, &datafield);
+        vec_push(rec->field_vec, &datafield);
     }
 
 	cyaml_free(&config, &top_schema, crec, 0);
-    return datarec;
+    return rec;
 }
