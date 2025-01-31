@@ -106,7 +106,7 @@ Data_Table *new_data_table_from_table_pool(Table_Pool *pool, const char *name, i
     table->col_count = col_count;
     table->row_count = 0;
     table->name = name;
-    table->data_mem = (Data_Memory *)dymem_init(MB(2)); // FIXME!
+    table->data_mem = (Data_Memory *)malloc(sizeof(Data_Memory));
     table->data_mem->dymem_bin_data = dymem_init(MB(2));
     table->data_mem->dymem_str_data = dymem_init(MB(2));
     table->data_mem->dymem_meta_data = dymem_init(KB(1));
