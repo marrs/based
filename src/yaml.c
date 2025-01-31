@@ -121,7 +121,7 @@ Record *new_record_from_cyaml_file(char *filename)
     Cyaml_Record *crec;
 
 	err = cyaml_load_file(filename, &config,
-			&top_schema, (cyaml_data_t **)&crec, NULL);  // TODO: (**)&!
+			&top_schema, (cyaml_data_t **)&crec, NULL);
 	if (CYAML_OK != err) {
 		fprintf(stderr, "ERROR: %s\n", cyaml_strerror(err));
 		return NULL;
