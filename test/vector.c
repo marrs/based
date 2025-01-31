@@ -1,10 +1,3 @@
-#include "test.h"
-#include "../src/util.h"
-
-#include "../src/memory.h"
-#include "../src/memory.c"
-
-int main()
 {
     describe("vec_seek") {
         it("returns the element for given index, across page boundaries") {
@@ -46,5 +39,4 @@ int main()
         delete_vector(vec);
         delete_vector_iter(veci);
     } tested;
-    return 0;
 }

@@ -4,15 +4,20 @@
 #include <assert.h>
 #include <string.h>
 
-static char test_pad0[1] = "";
-static char test_pad1[3] = "  ";
-static char test_pad2[5] = "    ";
-char *test_padding[3] = {
+static char test_pad0[] = "";
+static char test_pad1[] = "  ";
+static char test_pad2[] = "    ";
+static char test_pad3[] = "      ";
+static char test_pad4[] = "        ";
+static char test_pad5[] = "          ";
+char *test_padding[] = {
     test_pad0,
     test_pad1,
     test_pad2,
+    test_pad3,
+    test_pad4,
+    test_pad5,
 };
-char test_padAmt[17] = "\0";
 int test_padlen = 0;
 int passing_tests = 0;
 int failing_tests = 0;
