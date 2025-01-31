@@ -1,3 +1,8 @@
+int is_ws_char(char x)
+{
+    return x == '\t' || x == '\n' || x == ' ';
+}
+
 int str_starts_with(char *str, const char *prefix)
 {
     return (0 == strncmp(prefix, str, strlen(prefix)));

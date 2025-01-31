@@ -8,6 +8,8 @@ enum event_id {
     APP_EVENT_LOAD_TABLE,
     APP_EVENT_VIEW_TABLE,
     APP_EVENT_REFRESH_VIEW,
+    APP_EVENT_CREATE_RECORD,
+    APP_EVENT_EDIT_FILE,
 };
 
 typedef struct Event {
@@ -21,3 +23,5 @@ typedef struct Event {
         void *data_as_null;
     };
 } Event;
+
+#define plain_event(evt) (Event){ evt, DYTYPE_NULL, .data_as_null = NULL }

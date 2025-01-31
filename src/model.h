@@ -32,6 +32,17 @@ typedef struct data_column {
     Vector *cell_vec;
 } Data_Column;
 
+typedef struct data_field {
+    char *name;
+    char *value;
+} Data_Field;
+
+typedef struct data_record {
+    int field_count;
+    Vector *field_vec;
+    Dymem *dymem_data;
+} Data_Record;
+
 typedef struct table_pool {
     int table_count;
     Vector *table_vec;

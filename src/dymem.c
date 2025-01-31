@@ -7,6 +7,7 @@ void *dymem_allocate(struct dymem *mem, size_t len)
 {
     Memory_Page *page = NULL;
 
+    assert (NULL != mem);
     if (NULL == mem->page_cursor) {
         page = dymem_new_page(mem, len);
 

@@ -1,5 +1,6 @@
 enum dytype {
-    DYTYPE_NULL = 0,
+    DYTYPE_UNKNOWN = 0,
+    DYTYPE_NULL,
     DYTYPE_CHAR,
     DYTYPE_INT,
     DYTYPE_FLOAT,

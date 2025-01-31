@@ -33,6 +33,43 @@ start:
             global_app_state.current_view = event.data_as_int;
             break;
 
+        case APP_EVENT_CREATE_RECORD: {
+            Data_Table *table = global_app_state.current_table_view->table;
+            char *newrec_filename = "tmp_create_record.yml";
+            FILE *file = fopen(newrec_filename, "w");
+            if (!file) {
+                // TODO: Handle error in UI.
+                fprintf(stderr, "Failed to open temp yaml file for writing: %s\n", newrec_filename);
+            }
+            Vector_Iter *iter = new_vector_iter(table->column_vec);
+            Data_Column *col = NULL;
+
+            vec_loop (iter, Data_Column, col) {
+                if (!col->is_read_only) {
+                    fprintf(file, "%s:\n", col->name);
+                }
+            } delete_vector_iter(iter);
+            fclose(file);
+            event = (Event){ APP_EVENT_EDIT_FILE, DYTYPE_TEXT, .data_as_text = newrec_filename};
+            goto start;
+        } break;
+
+        case APP_EVENT_EDIT_FILE: {
+            pid_t pid = fork();
+
+            if (0 == pid) { // child
+                char *args[] = {"/usr/bin/vim", event.data_as_text, NULL};
+                execvp(args[0], args);
+                // TODO:
+                // - Parse results on file save
+                // - Identify fields without required data (inc. foreign records)
+            } else {        // parent
+                int status;
+                waitpid(pid, &status, 0);
+                printw("Child process finished\n");
+            }
+        } break;
+
         case APP_EVENT_REFRESH_VIEW: break;
     }
 
@@ -59,18 +96,22 @@ start:
         case UI_EVENT_KEY_PRESS:
             switch (event.data_as_char) {
             case 'j':
-                event = (Event){ UI_EVENT_CURSOR_DOWN, DYTYPE_NULL, .data_as_null = NULL };
+                event = plain_event(UI_EVENT_CURSOR_DOWN);
                 goto start;
                 break;
 
             case 'k':
-                event = (Event){ UI_EVENT_CURSOR_UP, DYTYPE_NULL, .data_as_null = NULL };
+                event = plain_event(UI_EVENT_CURSOR_UP);
                 goto start;
                 break;
 
             case 'l':
-                event = (Event){ UI_EVENT_CURSOR_RIGHT, DYTYPE_NULL, .data_as_null = NULL };
+                event = plain_event(UI_EVENT_CURSOR_RIGHT);
                 goto start;
+                break;
+
+            case 'c':
+                dispatch_app_event(plain_event(APP_EVENT_CREATE_RECORD));
                 break;
 
             case 'q': 
@@ -78,16 +119,7 @@ start:
                 break;
 
             case 'e':
-                pid_t pid = fork();
-
-                if (pid == 0) { // child
-                    char *args[] = {"/usr/bin/vim", NULL};
-                    execvp(args[0], args);
-                } else {        // parent
-                    int status;
-                    waitpid(pid, &status, 0);
-                    printw("Child process finished\n");
-                }
+                dispatch_app_event(plain_event(APP_EVENT_EDIT_FILE));
                 break;
             }
             break;
@@ -96,8 +128,7 @@ start:
             if (global_app_state.current_table_view->cursor.row > 0) {
                 --global_app_state.current_table_view->cursor.row;
             }
-            event = (Event){ APP_EVENT_REFRESH_VIEW, DYTYPE_NULL, .data_as_null = NULL };
-            dispatch_app_event(event);
+            dispatch_app_event(plain_event(APP_EVENT_REFRESH_VIEW));
         } break;
 
         case UI_EVENT_CURSOR_DOWN: {
@@ -105,8 +136,7 @@ start:
                     < global_app_state.current_table_view->table->row_count -1) {
                 ++global_app_state.current_table_view->cursor.row;
             }
-            event = (Event){ APP_EVENT_REFRESH_VIEW, DYTYPE_NULL, .data_as_null = NULL };
-            dispatch_app_event(event);
+            dispatch_app_event(plain_event(APP_EVENT_REFRESH_VIEW));
         } break;
 
         case UI_EVENT_CURSOR_RIGHT: {
